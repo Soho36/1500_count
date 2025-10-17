@@ -1,0 +1,16 @@
+/venv/
+/.idea/
+/csvs/
+/parts_longs/
+/parts_shorts/
+/25spread/
+/Merge_MNQ_contracts/files_to_merge_inputs/
+/Merge_MNQ_contracts/merged_files_outputs/
+/TimeShift_TradeHistory/inputs/
+/TimeShift_TradeHistory/outputs/
+/XLSX_files_split/input/
+/XLSX_files_split/output/
+/1500 count/csvs/
+/1500 count/Runs_reports_static/
+/1500 count/Runs_reports_dynamic/
+/1500 count/Logs/
