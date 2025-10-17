@@ -5,7 +5,7 @@ df = pd.read_csv("csvs/with_pnl.csv", sep="\t")
 pd.set_option('display.width', 1000)
 pd.set_option('display.max_rows', None)
 pd.set_option('display.max_columns', None)
-pd.set_option('display.width', 1000)  # Increase display width
+pd.set_option('display.width', 1000)
 
 # Clean number formatting
 df['P/L (Net)'] = (
@@ -23,7 +23,7 @@ TARGET = 1500               # profit target per run
 SIZE = 1                    # static lot size (if not using dynamic)
 CONTRACT_STEP = 500         # add/remove 1 contract per $500 gain/loss
 USE_DYNAMIC_LOT = False     # 🔄 switch: True = dynamic lot, False = static
-USE_TRAILING_DD = False      # 🔁 switch: True = trailing DD, False = static DD
+USE_TRAILING_DD = True      # 🔁 switch: True = trailing DD, False = static DD
 SAVE_CONTRACT_LOG = True    # save detailed per-day info for first N runs
 MAX_RUNS_TO_LOG = 1000      # limit detailed log to first N runs
 # ==============
@@ -135,7 +135,6 @@ if not valid.empty:
     print("\n====== SUMMARY STATS ======")
     print("Target:", TARGET)
     print("Max drawdown allowed:", MAX_DD)
-    print("Size multiplier:", SIZE)
     print("Dynamic lot enabled:", USE_DYNAMIC_LOT)
     print("Trailing DD enabled:", USE_TRAILING_DD)
     print()
@@ -203,24 +202,27 @@ else:
 
 # --- Save all to Excel ---
 folder = "Runs_reports_dynamic_lot" if USE_DYNAMIC_LOT else "Runs_reports_static_lot"
-filename = \
-    f"dynamic_pnl_growth_report_TR{TARGET}_DD{MAX_DD}_SZ{SIZE}_STEP{CONTRACT_STEP}_TDD{USE_TRAILING_DD}.xlsx" if USE_DYNAMIC_LOT \
-    else f"static_pnl_growth_report_TR{TARGET}_DD{MAX_DD}_SZ{SIZE}_TDD{USE_TRAILING_DD}.xlsx"
+filename = (
+    f"dynamic_pnl_growth_report_{TARGET}_{MAX_DD}_{SIZE}_{CONTRACT_STEP}_{'trailing' if USE_TRAILING_DD else 'static'}.xlsx"
+    if USE_DYNAMIC_LOT
+    else f"static_pnl_growth_report_{TARGET}_{MAX_DD}_{SIZE}_{'trailing' if USE_TRAILING_DD else 'static'}.xlsx"
+)
 
 with pd.ExcelWriter(f"{folder}/{filename}") as writer:
     results_df.to_excel(writer, sheet_name="All Runs", index=False)
     summary_df.to_excel(writer, sheet_name="Summary Stats", index=False)
     hist_data.to_excel(writer, sheet_name="Histogram", index=False)
-# --- Optional save of detailed contract log ---
 
+# --- Optional save of detailed contract log ---
 if SAVE_CONTRACT_LOG:
     details_df = pd.DataFrame(detailed_log)
-    details_path = \
-        f"Logs/dynamic_contracts_log_TR{TARGET}_DD{MAX_DD}_SZ{SIZE}_STEP{CONTRACT_STEP}_TDD{USE_TRAILING_DD}.csv" if USE_DYNAMIC_LOT \
-        else f"Logs/static_contracts_log_TR{TARGET}_DD{MAX_DD}_SZ{SIZE}_TDD{USE_TRAILING_DD}.csv"
+    details_path = (
+        f"Logs/dynamic_contracts_log_{TARGET}_{MAX_DD}_{SIZE}_{CONTRACT_STEP}_{'trailing' if USE_TRAILING_DD else 'static'}.csv"
+        if USE_DYNAMIC_LOT
+        else f"Logs/static_contracts_log_{TARGET}_{MAX_DD}_{SIZE}_{'trailing' if USE_TRAILING_DD else 'static'}.csv"
+    )
     details_df.to_csv(details_path, index=False, sep="\t")
     print(f"\n📄 Detailed contract log saved to: {details_path}")
-
 
 print(f"\n✅ Excel report created: {filename}")
 print("   Sheets: [All Runs, Summary Stats, Histogram]")
