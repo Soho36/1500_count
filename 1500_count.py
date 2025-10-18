@@ -31,8 +31,8 @@ SAVE_CONTRACT_LOG = True    # save detailed per-day info for first N runs
 MAX_RUNS_TO_LOG = 1000      # limit detailed log to first N runs
 
 # --- Optional date filter ---
-START_DATE = "2019-05-24"   # set to None to disable filtering
-END_DATE = None             # set to None to disable filtering
+START_DATE = None          # set to None to disable filtering "YYYY-MM-DD"
+END_DATE = None             # set to None to disable filtering "YYYY-MM-DD"
 
 if START_DATE or END_DATE:
     if START_DATE:
@@ -197,12 +197,14 @@ total_runs = len(results_df)
 blowups = len(results_df[results_df["Blown"] == True])
 successful = len(valid)
 
+completed_runs = successful + blowups
 
 print("\n====== PROBABILITY METRICS ======")
-print(f"Total runs: {total_runs}")
-print(f"Successful runs: {successful} ({successful / total_runs * 100:.2f}%)")
-print(f"Blowups: {blowups} ({blowups / total_runs * 100:.2f}%)")
-print(f"Survival probability: {(1 - blowups / total_runs) * 100:.2f}%")
+print(f"Total runs (including unfinished): {total_runs}")
+print(f"Completed runs: {completed_runs}")
+print(f"Successful runs: {successful} ({successful / completed_runs * 100:.2f}%)" if completed_runs > 0 else "Successful runs: N/A")
+print(f"Blowups: {blowups} ({blowups / completed_runs * 100:.2f}%)" if completed_runs > 0 else "Blowups: N/A")
+print(f"Survival probability: {(1 - blowups / completed_runs) * 100:.2f}%" if completed_runs > 0 else "Survival probability: N/A")
 
 
 # --- Summary Sheet ---
