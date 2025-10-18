@@ -143,8 +143,18 @@ def summary_stats(results_df):
     }
 
 
-print("STATIC DD summary:", summary_stats(res_static))
-print("TRAILING DD summary:", summary_stats(res_trail))
+# print("STATIC DD summary:", summary_stats(res_static))
+# print("TRAILING DD summary:", summary_stats(res_trail))
+
+
+stats_df = pd.DataFrame({
+    "Static DD": summary_stats(res_static),
+    "Trailing DD": summary_stats(res_trail)
+})
+
+print("\n=== COMPARISON TABLE ===")
+print(stats_df)
+
 
 # Find start dates that change outcome
 merged = pd.merge(

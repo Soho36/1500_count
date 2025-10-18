@@ -23,7 +23,7 @@ TARGET = 1500               # profit target per run
 SIZE = 1                    # static lot size (if not using dynamic)
 CONTRACT_STEP = 500         # add/remove 1 contract per $500 gain/loss
 USE_DYNAMIC_LOT = False     # 🔄 switch: True = dynamic lot, False = static
-USE_TRAILING_DD = False      # 🔁 switch: True = trailing DD, False = static DD
+USE_TRAILING_DD = True      # 🔁 switch: True = trailing DD, False = static DD
 SAVE_CONTRACT_LOG = True    # save detailed per-day info for first N runs
 MAX_RUNS_TO_LOG = 1000      # limit detailed log to first N runs
 # ==============
@@ -86,6 +86,7 @@ for start_idx in range(len(df)):
             results.append({
                 "Start_Date": df.loc[start_idx, 'Date'],
                 "Rows_to_+Target": None,
+                "Rows_to_blown": days,
                 "Max_Drawdown": peak_pnl - cumulative_pnl if USE_TRAILING_DD else abs(min_cumulative_pnl),
                 "Average_Contracts": sum(contract_history) / len(contract_history) if USE_DYNAMIC_LOT else SIZE,
                 "Minimum_Contracts": min(contract_history) if USE_DYNAMIC_LOT else SIZE,
@@ -101,6 +102,7 @@ for start_idx in range(len(df)):
             results.append({
                 "Start_Date": df.loc[start_idx, 'Date'],
                 "Rows_to_+Target": days,
+                "Rows_to_blown": None,
                 "Max_Drawdown": abs(min_cumulative_pnl),
                 "Average_Contracts": sum(contract_history) / len(contract_history) if USE_DYNAMIC_LOT else SIZE,
                 "Minimum_Contracts": min(contract_history) if USE_DYNAMIC_LOT else SIZE,
@@ -116,6 +118,7 @@ for start_idx in range(len(df)):
         results.append({
             "Start_Date": df.loc[start_idx, 'Date'],
             "Rows_to_+Target": None,
+            "Rows_to_blown": None,
             "Max_Drawdown": abs(min_cumulative_pnl),
             "Average_Contracts": sum(contract_history) / len(contract_history) if USE_DYNAMIC_LOT else SIZE,
             "Minimum_Contracts": min(contract_history) if USE_DYNAMIC_LOT else SIZE,
@@ -129,8 +132,23 @@ for start_idx in range(len(df)):
 results_df = pd.DataFrame(results)
 print(results_df)
 
+# --- Blowup stats ---
+blown_df = results_df[results_df['Rows_to_blown'].notna()]
+
+if not blown_df.empty:
+    min_days_to_blow = blown_df['Rows_to_blown'].min()
+    max_days_to_blow = blown_df['Rows_to_blown'].max()
+    avg_blow_days = round(blown_df['Rows_to_blown'].mean(), 1)
+    median_blow_days = blown_df['Rows_to_blown'].median()
+    mode_blow_days = blown_df['Rows_to_blown'].mode().values
+else:
+    min_days_to_blow = max_days_to_blow = None
+    avg_blow_days = median_blow_days = None
+    mode_blow_days = []
+
 # --- Stats ---
 valid = results_df.dropna(subset=["Rows_to_+Target"])
+mode_days = valid["Rows_to_+Target"].mode().values
 if not valid.empty:
     print("\n====== SUMMARY STATS ======")
     print("Target:", TARGET)
@@ -138,19 +156,29 @@ if not valid.empty:
     print("Size multiplier:", SIZE)
     print("Dynamic lot enabled:", USE_DYNAMIC_LOT)
     print("Trailing DD enabled:", USE_TRAILING_DD)
-    print()
+
+    print("\n====== TARGETS ======")
     print("Min days:", valid["Rows_to_+Target"].min())
     print("Max days:", valid["Rows_to_+Target"].max())
     print("Average days:", round(valid["Rows_to_+Target"].mean(), 2))
     print("Median days:", valid["Rows_to_+Target"].median())
     print("Std dev days:", round(valid["Rows_to_+Target"].std(), 2))
-    print("Mode days:", valid["Rows_to_+Target"].mode().values)
+    print(f"Mode days: {mode_days[0]:.0f}" if len(mode_days) > 0 else "Mode days: N/A")
     print("Count of valid runs:", len(valid))
+
+    print("\n====== BLOWUPS ======")
+    print("Min days to blowup:", min_days_to_blow if min_days_to_blow is not None else "N/A")
+    print("Max days to blowup:", max_days_to_blow if max_days_to_blow is not None else "N/A")
+    print(f"Avg days to blowup: {avg_blow_days:.0f}" if avg_blow_days is not None else "Avg days to blowup: N/A")
+    print(f"Median days to blowup: {median_blow_days:.0f}" if median_blow_days is not None else "Median days to blowup: N/A")
+    print(f"Mode days to blowup: {mode_blow_days[0]:.0f}" if len(mode_blow_days) > 0 else "Mode days to blowup: N/A")
+
 
 # --- Probability metrics ---
 total_runs = len(results_df)
 blowups = len(results_df[results_df["Blown"] == True])
 successful = len(valid)
+
 
 print("\n====== PROBABILITY METRICS ======")
 print(f"Total runs: {total_runs}")
@@ -158,16 +186,32 @@ print(f"Successful runs: {successful} ({successful / total_runs * 100:.2f}%)")
 print(f"Blowups: {blowups} ({blowups / total_runs * 100:.2f}%)")
 print(f"Survival probability: {(1 - blowups / total_runs) * 100:.2f}%")
 
+
 # --- Summary Sheet ---
 summary_data = {
     "Metric": [
+        "Dynamic lot enabled",
+        "Trailing DD enabled",
+        "Position size multiplier",
+        "Target",
+        "Max Drawdown Limit",
+        "",
+        "TARGETS STATISTICS",
         "Min days", "Max days", "Average days", "Median days", "Std dev days", "Mode days",
         "Count of valid runs", "Total runs", "Successful runs (%)",
-        "Blowups (%)", "Survival probability (%)", "",
-        "Dynamic lot enabled", "Trailing DD enabled",
-        "Position size multiplier", "Target", "Max Drawdown Limit"
+        "Blowups (%)", "Survival probability (%)",
+        "",
+        "BLOWUPS STATISTICS",
+        "Min days to blowup", "Max days to blowup", "Average days to blowup", "Median days to blowup", "Mode days to blowup"
     ],
     "Value": [
+        USE_DYNAMIC_LOT,
+        USE_TRAILING_DD,
+        SIZE,
+        TARGET,
+        MAX_DD,
+        "",
+        "",
         valid["Rows_to_+Target"].min() if not valid.empty else None,
         valid["Rows_to_+Target"].max() if not valid.empty else None,
         round(valid["Rows_to_+Target"].mean(), 2) if not valid.empty else None,
@@ -176,15 +220,12 @@ summary_data = {
         valid["Rows_to_+Target"].mode().values[0] if not valid.empty else None,
         len(valid),
         len(results_df),
-        f"{len(valid) / len(results_df) * 100:.2f}%" if total_runs > 0 else None,
-        f"{blowups / len(results_df) * 100:.2f}%" if total_runs > 0 else None,
-        f"{(1 - blowups / len(results_df)) * 100:.2f}%" if total_runs > 0 else None,
+        f"{len(valid) / len(results_df) * 100:.1f}%" if total_runs > 0 else None,
+        f"{blowups / len(results_df) * 100:.1f}%" if total_runs > 0 else None,
+        f"{(1 - blowups / len(results_df)) * 100:.1f}%" if total_runs > 0 else None,
         "",
-        USE_DYNAMIC_LOT,
-        USE_TRAILING_DD,
-        SIZE,
-        TARGET,
-        MAX_DD
+        "",
+        min_days_to_blow, max_days_to_blow, avg_blow_days, median_blow_days, mode_blow_days[0] if len(mode_blow_days) > 0 else None
     ]
 }
 summary_df = pd.DataFrame(summary_data)
@@ -207,11 +248,20 @@ filename = \
     f"dynamic_pnl_growth_report_TR{TARGET}_DD{MAX_DD}_SZ{SIZE}_STEP{CONTRACT_STEP}_TDD{USE_TRAILING_DD}.xlsx" if USE_DYNAMIC_LOT \
     else f"static_pnl_growth_report_TR{TARGET}_DD{MAX_DD}_SZ{SIZE}_TDD{USE_TRAILING_DD}.xlsx"
 
-with pd.ExcelWriter(f"{folder}/{filename}") as writer:
+with pd.ExcelWriter(f"{folder}/{filename}", engine="xlsxwriter") as writer:
     results_df.to_excel(writer, sheet_name="All Runs", index=False)
     summary_df.to_excel(writer, sheet_name="Summary Stats", index=False)
     hist_data.to_excel(writer, sheet_name="Histogram", index=False)
-# --- Optional save of detailed contract log ---
+
+    # Set column width for "Summary Stats" sheet
+    worksheet = writer.sheets["Summary Stats"]
+    bold_format = writer.book.add_format({"bold": True})  # Define bold format
+
+    worksheet.set_column(0, 0, 25)  # Adjust column A width (Metric column)
+    worksheet.set_column(1, 1, 15)  # Adjust column B width (Value column)
+
+    worksheet.set_row(7, None, bold_format)   # Row 1 (index starts at 0)
+    worksheet.set_row(20, None, bold_format)  # Row 5
 
 if SAVE_CONTRACT_LOG:
     details_df = pd.DataFrame(detailed_log)
