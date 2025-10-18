@@ -16,6 +16,9 @@ df['P/L (Net)'] = (
     .astype(float)
 )
 
+# --- Parse dates ---
+df["Date"] = pd.to_datetime(df["Date"], format="%d.%m.%Y")
+
 # === CONFIG ===
 MAX_DD = 1500               # maximum drawdown allowed before "blowup"
 TARGET = 1500               # profit target per run
@@ -26,7 +29,22 @@ USE_DYNAMIC_LOT = False     # 🔄 switch: True = dynamic lot, False = static
 USE_TRAILING_DD = True      # 🔁 switch: True = trailing DD, False = static DD
 SAVE_CONTRACT_LOG = True    # save detailed per-day info for first N runs
 MAX_RUNS_TO_LOG = 1000      # limit detailed log to first N runs
+
+# --- Optional date filter ---
+START_DATE = "2019-05-24"   # set to None to disable filtering
+END_DATE = None             # set to None to disable filtering
+
+if START_DATE or END_DATE:
+    if START_DATE:
+        df = df[df["Date"] >= pd.to_datetime(START_DATE)]
+    if END_DATE:
+        df = df[df["Date"] <= pd.to_datetime(END_DATE)]
+    df = df.sort_values("Date").reset_index(drop=True)
+    print(f"📅 Data filtered from {START_DATE or 'beginning'} to {END_DATE or 'end'}")
+    print(f"Remaining rows: {len(df)}")
+
 # ==============
+
 
 results = []
 detailed_log = []
