@@ -20,10 +20,10 @@ df['P/L (Net)'] = (
 df["Date"] = pd.to_datetime(df["Date"], format="%d.%m.%Y")
 
 # === CONFIG ===
-MAX_DD = 1500               # maximum drawdown allowed before "blowup"
-TARGET = 1500               # profit target per run
+MAX_DD = 2500               # maximum drawdown allowed before "blowup"
+TARGET = 3000               # profit target per run
 
-SIZE = 1                    # static lot size (if not using dynamic)
+SIZE = 2                    # static lot size (if not using dynamic)
 CONTRACT_STEP = 500         # add/remove 1 contract per $500 gain/loss
 USE_DYNAMIC_LOT = False     # 🔄 switch: True = dynamic lot, False = static
 USE_TRAILING_DD = True      # 🔁 switch: True = trailing DD, False = static DD
@@ -31,8 +31,9 @@ SAVE_CONTRACT_LOG = True    # save detailed per-day info for first N runs
 MAX_RUNS_TO_LOG = 100      # limit detailed log to first N runs
 
 # --- Optional date filter ---
-START_DATE = "2019-05-24"          # set to None to disable filtering "YYYY-MM-DD"
-END_DATE = "2020-02-29"             # set to None to disable filtering "YYYY-MM-DD"
+START_DATE = "2020-04-01"          # set to None to disable filtering "YYYY-MM-DD"
+# END_DATE = "2020-02-29"             # set to None to disable filtering "YYYY-MM-DD"
+END_DATE = None
 
 if START_DATE or END_DATE:
     if START_DATE:
@@ -221,7 +222,7 @@ summary_data = {
         "Resolved runs",
         "Successful runs",
         "Blowups",
-        "Successful runs (%)", "Blowups (%)", "Survival probability (%)",
+        "Successful runs (%)", "Blowups (%)",
         "",
         "BLOWUPS STATISTICS",
         "Min days to blowup", "Max days to blowup", "Average days to blowup", "Median days to blowup", "Mode days to blowup"
@@ -246,7 +247,6 @@ summary_data = {
         blowups,
         f"{successful / resolved_runs * 100:.1f}%" if resolved_runs > 0 else None,
         f"{blowups / resolved_runs * 100:.1f}%" if resolved_runs > 0 else None,
-        f"{(1 - blowups / resolved_runs) * 100:.1f}%" if resolved_runs > 0 else None,
         "",
         "",
         min_days_to_blow,

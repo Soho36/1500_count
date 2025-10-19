@@ -7,12 +7,12 @@ import pandas as pd
 INPUT_FILE = "csvs/with_pnl.csv"
 SEP = "\t"
 
-MAX_DD = 1500
-TARGET = 1500
+MAX_DD = 625
+TARGET = 2000
 SIZE = 1
 CONTRACT_STEP = 500
 USE_DYNAMIC_LOT = False
-USE_TRAILING_DD = True
+USE_TRAILING_DD = False
 SAVE_CONTRACT_LOG = False       # disable to speed up monthly runs
 MAX_RUNS_TO_LOG = 100
 EXPORT_MONTHLY_SUMMARY = True
@@ -49,7 +49,7 @@ def run_simulation(df_slice, start_label=None):
         reached = False
         blown = False
         peak_pnl = 0
-        trailing_floor = -MAX_DD
+        # trailing_floor = -MAX_DD
         contracts = SIZE if not USE_DYNAMIC_LOT else 1
         contract_history = []
 
@@ -132,20 +132,26 @@ def run_simulation(df_slice, start_label=None):
         min_days_to_blow = max_days_to_blow = avg_blow_days = median_blow_days = None
         mode_blow_days = []
 
-
     # === Summary ===
     summary = {
         "Start_Month": start_label or df_slice["Date"].iloc[0].strftime("%Y-%m"),
+        "TARGETS STATISTICS": "",
+        "Min_days": valid["Rows_to_+Target"].min() if not valid.empty else None,
+        "Max_days": valid["Rows_to_+Target"].max() if not valid.empty else None,
+        "Avg_days": round(valid["Rows_to_+Target"].mean(), 2) if not valid.empty else None,
+        "Median_days": valid["Rows_to_+Target"].median() if not valid.empty else None,
+        "Std_dev_days": round(valid["Rows_to_+Target"].std(), 2) if not valid.empty else None,
+        "Mode_days": valid["Rows_to_+Target"].mode().iloc[0] if not valid.empty and not valid["Rows_to_+Target"].mode().empty else None,
+        "": "",
         "Total_runs": total_runs,
         "Resolved_runs": resolved_runs,
         "Successful_runs": successful,
         "Blowups": blowups,
         "Successful_%": round(successful / resolved_runs * 100, 2) if resolved_runs > 0 else None,
         "Blowups_%": round(blowups / resolved_runs * 100, 2) if resolved_runs > 0 else None,
-        "Survival_%": round((1 - blowups / resolved_runs) * 100, 2) if resolved_runs > 0 else None,
-        "Avg_days": round(valid["Rows_to_+Target"].mean(), 2) if not valid.empty else None,
-        "Median_days": valid["Rows_to_+Target"].median() if not valid.empty else None,
-        "Mode_days": valid["Rows_to_+Target"].mode().iloc[0] if not valid.empty and not valid["Rows_to_+Target"].mode().empty else None,
+        "BLOWUPS STATISTICS": "",
+        "Min_days_to_blow": min_days_to_blow,
+        "Max_days_to_blow": max_days_to_blow,
         "Avg_days_to_blow": avg_blow_days,
         "Median_days_to_blow": median_blow_days,
         "Mode_days_to_blow": mode_blow_days[0] if len(mode_blow_days) > 0 else None
@@ -191,6 +197,9 @@ with pd.ExcelWriter(f"{folder_name}/ {file_name}", engine="xlsxwriter") as write
     # Set column width for "Summary Stats" sheet
     worksheet = writer.sheets["Rolling_months"]
     worksheet.set_column(0, 0, 25)  # Set width of first column
+    worksheet.set_row(4, None, writer.book.add_format({"bold": True, "font_color": "orange"}))
+    worksheet.set_row(13, None, writer.book.add_format({"font_color": "green"}))
+    worksheet.set_row(14, None, writer.book.add_format({"font_color": "red"}))
 
     print(f"\n✅ Monthly rolling simulation completed.")
     print(f"📄 Saved summary report: {file_name}")
