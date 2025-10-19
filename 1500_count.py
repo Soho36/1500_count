@@ -28,11 +28,11 @@ CONTRACT_STEP = 500         # add/remove 1 contract per $500 gain/loss
 USE_DYNAMIC_LOT = False     # 🔄 switch: True = dynamic lot, False = static
 USE_TRAILING_DD = True      # 🔁 switch: True = trailing DD, False = static DD
 SAVE_CONTRACT_LOG = True    # save detailed per-day info for first N runs
-MAX_RUNS_TO_LOG = 1000      # limit detailed log to first N runs
+MAX_RUNS_TO_LOG = 100      # limit detailed log to first N runs
 
 # --- Optional date filter ---
-START_DATE = None          # set to None to disable filtering "YYYY-MM-DD"
-END_DATE = None             # set to None to disable filtering "YYYY-MM-DD"
+START_DATE = "2019-05-24"          # set to None to disable filtering "YYYY-MM-DD"
+END_DATE = "2020-02-29"             # set to None to disable filtering "YYYY-MM-DD"
 
 if START_DATE or END_DATE:
     if START_DATE:
@@ -196,30 +196,32 @@ if not valid.empty:
 total_runs = len(results_df)
 blowups = len(results_df[results_df["Blown"] == True])
 successful = len(valid)
-
-completed_runs = successful + blowups
+resolved_runs = successful + blowups
 
 print("\n====== PROBABILITY METRICS ======")
 print(f"Total runs (including unfinished): {total_runs}")
-print(f"Completed runs: {completed_runs}")
-print(f"Successful runs: {successful} ({successful / completed_runs * 100:.2f}%)" if completed_runs > 0 else "Successful runs: N/A")
-print(f"Blowups: {blowups} ({blowups / completed_runs * 100:.2f}%)" if completed_runs > 0 else "Blowups: N/A")
-print(f"Survival probability: {(1 - blowups / completed_runs) * 100:.2f}%" if completed_runs > 0 else "Survival probability: N/A")
+print(f"Completed runs: {resolved_runs}")
+print(f"Successful runs: {successful} ({successful / resolved_runs * 100:.2f}%)" if resolved_runs > 0 else "Successful runs: N/A")
+print(f"Blowups: {blowups} ({blowups / resolved_runs * 100:.2f}%)" if resolved_runs > 0 else "Blowups: N/A")
+print(f"Survival probability: {(1 - blowups / resolved_runs) * 100:.2f}%" if resolved_runs > 0 else "Survival probability: N/A")
 
 
 # --- Summary Sheet ---
 summary_data = {
     "Metric": [
-        "Dynamic lot enabled",
-        "Trailing DD enabled",
+        "Dynamic lot",
+        "Trailing DD",
         "Position size multiplier",
         "Target",
         "Max Drawdown Limit",
         "",
         "TARGETS STATISTICS",
         "Min days", "Max days", "Average days", "Median days", "Std dev days", "Mode days",
-        "Count of valid runs", "Total runs", "Successful runs (%)",
-        "Blowups (%)", "Survival probability (%)",
+        "Total runs",
+        "Resolved runs",
+        "Successful runs",
+        "Blowups",
+        "Successful runs (%)", "Blowups (%)", "Survival probability (%)",
         "",
         "BLOWUPS STATISTICS",
         "Min days to blowup", "Max days to blowup", "Average days to blowup", "Median days to blowup", "Mode days to blowup"
@@ -238,14 +240,20 @@ summary_data = {
         valid["Rows_to_+Target"].median() if not valid.empty else None,
         round(valid["Rows_to_+Target"].std(), 2) if not valid.empty else None,
         valid["Rows_to_+Target"].mode().values[0] if not valid.empty else None,
+        total_runs,
+        resolved_runs,
         len(valid),
-        len(results_df),
-        f"{len(valid) / len(results_df) * 100:.1f}%" if total_runs > 0 else None,
-        f"{blowups / len(results_df) * 100:.1f}%" if total_runs > 0 else None,
-        f"{(1 - blowups / len(results_df)) * 100:.1f}%" if total_runs > 0 else None,
+        blowups,
+        f"{successful / resolved_runs * 100:.1f}%" if resolved_runs > 0 else None,
+        f"{blowups / resolved_runs * 100:.1f}%" if resolved_runs > 0 else None,
+        f"{(1 - blowups / resolved_runs) * 100:.1f}%" if resolved_runs > 0 else None,
         "",
         "",
-        min_days_to_blow, max_days_to_blow, avg_blow_days, median_blow_days, mode_blow_days[0] if len(mode_blow_days) > 0 else None
+        min_days_to_blow,
+        max_days_to_blow,
+        avg_blow_days,
+        median_blow_days,
+        mode_blow_days[0] if len(mode_blow_days) > 0 else None
     ]
 }
 summary_df = pd.DataFrame(summary_data)
@@ -281,7 +289,7 @@ with pd.ExcelWriter(f"{folder}/{filename}", engine="xlsxwriter") as writer:
     worksheet.set_column(1, 1, 15)  # Adjust column B width (Value column)
 
     worksheet.set_row(7, None, bold_format)   # Row 1 (index starts at 0)
-    worksheet.set_row(20, None, bold_format)  # Row 5
+    worksheet.set_row(22, None, bold_format)  # Row 5
 
 if SAVE_CONTRACT_LOG:
     details_df = pd.DataFrame(detailed_log)
