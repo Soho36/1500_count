@@ -1,18 +1,19 @@
 import pandas as pd
-
+import os
 # =========================================================
 # === CONFIGURATION =======================================
 # =========================================================
 
-INPUT_FILE = "csvs/with_pnl.csv"
+INPUT_FILE = "csvs/only_night.csv"
 SEP = "\t"
+input_filename = (os.path.basename("csvs/only_night.csv")).replace(".csv", "")
 
-MAX_DD = 625
-TARGET = 2000
+MAX_DD = 1500
+TARGET = 1500
 SIZE = 1
 CONTRACT_STEP = 500
 USE_DYNAMIC_LOT = False
-USE_TRAILING_DD = False
+USE_TRAILING_DD = True
 SAVE_CONTRACT_LOG = False       # disable to speed up monthly runs
 MAX_RUNS_TO_LOG = 100
 EXPORT_MONTHLY_SUMMARY = True
@@ -22,6 +23,8 @@ EXPORT_MONTHLY_SUMMARY = True
 # =========================================================
 
 df = pd.read_csv(INPUT_FILE, sep=SEP)
+print(f"📊 Loaded data from: {input_filename}")
+
 df["Date"] = pd.to_datetime(df["Date"], format="%d.%m.%Y")
 
 df["P/L (Net)"] = (
@@ -186,9 +189,9 @@ summary_df = pd.DataFrame(monthly_summaries)
 # Transpose it: months as columns, metrics as rows
 pivoted_df = summary_df.set_index("Start_Month").T
 
-folder_name = "Rolling_monthly_reports/"
+folder_name = f"{input_filename}/Rolling_monthly_reports/"
 file_name = (
-    f"Rolling_Monthly_Report_TR{TARGET}_DD{MAX_DD}_SZ{SIZE}"
+    f"{input_filename}_Rolling_Monthly_Report_TR{TARGET}_DD{MAX_DD}_SZ{SIZE}"
     f"_DYN_{USE_DYNAMIC_LOT}_TDD{USE_TRAILING_DD}.xlsx"
 )
 with pd.ExcelWriter(f"{folder_name}/ {file_name}", engine="xlsxwriter") as writer:

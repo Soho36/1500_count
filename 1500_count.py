@@ -1,7 +1,15 @@
 import pandas as pd
+import os
 
 # --- Load & clean data ---
-df = pd.read_csv("csvs/with_pnl.csv", sep="\t")
+# uncomment needed line:
+# input_file = "csvs/all_times.csv"
+input_file = "csvs/only_night.csv"
+
+df = pd.read_csv(input_file, sep="\t")
+input_filename = (os.path.basename(input_file)).replace(".csv", "")
+print(f"📊 Loaded data from: {input_filename}")
+
 pd.set_option('display.width', 1000)
 pd.set_option('display.max_rows', None)
 pd.set_option('display.max_columns', None)
@@ -20,10 +28,10 @@ df['P/L (Net)'] = (
 df["Date"] = pd.to_datetime(df["Date"], format="%d.%m.%Y")
 
 # === CONFIG ===
-MAX_DD = 2500               # maximum drawdown allowed before "blowup"
-TARGET = 3000               # profit target per run
+MAX_DD = 1500               # maximum drawdown allowed before "blowup"
+TARGET = 1500               # profit target per run
 
-SIZE = 2                    # static lot size (if not using dynamic)
+SIZE = 1                    # static lot size (if not using dynamic)
 CONTRACT_STEP = 500         # add/remove 1 contract per $500 gain/loss
 USE_DYNAMIC_LOT = False     # 🔄 switch: True = dynamic lot, False = static
 USE_TRAILING_DD = True      # 🔁 switch: True = trailing DD, False = static DD
@@ -31,8 +39,9 @@ SAVE_CONTRACT_LOG = True    # save detailed per-day info for first N runs
 MAX_RUNS_TO_LOG = 100      # limit detailed log to first N runs
 
 # --- Optional date filter ---
-START_DATE = "2020-04-01"          # set to None to disable filtering "YYYY-MM-DD"
+# START_DATE = "2020-04-01"          # set to None to disable filtering "YYYY-MM-DD"
 # END_DATE = "2020-02-29"             # set to None to disable filtering "YYYY-MM-DD"
+START_DATE = None
 END_DATE = None
 
 if START_DATE or END_DATE:
@@ -271,10 +280,10 @@ else:
     hist_data = pd.DataFrame(columns=["Days", "Took_days"])
 
 # --- Save all to Excel ---
-folder = "Runs_reports_dynamic_lot" if USE_DYNAMIC_LOT else "Runs_reports_static_lot"
+folder = f"{input_filename}/Runs_reports_dynamic_lot" if USE_DYNAMIC_LOT else f"{input_filename}/Runs_reports_static_lot"
 filename = \
-    f"dynamic_pnl_growth_report_TR{TARGET}_DD{MAX_DD}_SZ{SIZE}_STEP{CONTRACT_STEP}_TDD{USE_TRAILING_DD}.xlsx" if USE_DYNAMIC_LOT \
-    else f"static_pnl_growth_report_TR{TARGET}_DD{MAX_DD}_SZ{SIZE}_TDD{USE_TRAILING_DD}.xlsx"
+    f"{input_filename}_dynamic_pnl_growth_report_TR{TARGET}_DD{MAX_DD}_SZ{SIZE}_STEP{CONTRACT_STEP}_TDD{USE_TRAILING_DD}.xlsx" if USE_DYNAMIC_LOT \
+    else f"{input_filename}_static_pnl_growth_report_TR{TARGET}_DD{MAX_DD}_SZ{SIZE}_TDD{USE_TRAILING_DD}.xlsx"
 
 with pd.ExcelWriter(f"{folder}/{filename}", engine="xlsxwriter") as writer:
     results_df.to_excel(writer, sheet_name="All Runs", index=False)
@@ -294,8 +303,8 @@ with pd.ExcelWriter(f"{folder}/{filename}", engine="xlsxwriter") as writer:
 if SAVE_CONTRACT_LOG:
     details_df = pd.DataFrame(detailed_log)
     details_path = \
-        f"Logs/dynamic_contracts_log_TR{TARGET}_DD{MAX_DD}_SZ{SIZE}_STEP{CONTRACT_STEP}_TDD{USE_TRAILING_DD}.csv" if USE_DYNAMIC_LOT \
-        else f"Logs/static_contracts_log_TR{TARGET}_DD{MAX_DD}_SZ{SIZE}_TDD{USE_TRAILING_DD}.csv"
+        f"{input_filename}/Logs/{input_filename}_dynamic_contracts_log_TR{TARGET}_DD{MAX_DD}_SZ{SIZE}_STEP{CONTRACT_STEP}_TDD{USE_TRAILING_DD}.csv" if USE_DYNAMIC_LOT \
+        else f"{input_filename}/Logs/{input_filename}_static_contracts_log_TR{TARGET}_DD{MAX_DD}_SZ{SIZE}_TDD{USE_TRAILING_DD}.csv"
     details_df.to_csv(details_path, index=False, sep="\t")
     print(f"\n📄 Detailed contract log saved to: {details_path}")
 

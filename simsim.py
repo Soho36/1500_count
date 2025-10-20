@@ -6,7 +6,7 @@ import numpy as np
 # If not, define them before calling simulate.
 
 # --- Load & clean data ---
-df = pd.read_csv("csvs/with_pnl.csv", sep="\t")
+df = pd.read_csv("csvs/all_times.csv", sep="\t")
 pd.set_option('display.width', 1000)
 pd.set_option('display.max_rows', None)
 pd.set_option('display.max_columns', None)
