@@ -4,13 +4,15 @@ import os
 # === CONFIGURATION =======================================
 # =========================================================
 
-INPUT_FILE = "csvs/only_night.csv"
-SEP = "\t"
-input_filename = (os.path.basename("csvs/only_night.csv")).replace(".csv", "")
+# INPUT_FILE = "csvs/only_night.csv"
+INPUT_FILE = "csvs/all_times.csv"
 
-MAX_DD = 1500
-TARGET = 1500
-SIZE = 1
+SEP = "\t"
+input_filename = (os.path.basename(INPUT_FILE)).replace(".csv", "")
+
+MAX_DD = 30000
+TARGET = 30000
+SIZE = 10
 CONTRACT_STEP = 500
 USE_DYNAMIC_LOT = False
 USE_TRAILING_DD = True
@@ -23,7 +25,7 @@ EXPORT_MONTHLY_SUMMARY = True
 # =========================================================
 
 df = pd.read_csv(INPUT_FILE, sep=SEP)
-print(f"📊 Loaded data from: {input_filename}")
+print(f"📊 Loaded data from: {INPUT_FILE}")
 
 df["Date"] = pd.to_datetime(df["Date"], format="%d.%m.%Y")
 
