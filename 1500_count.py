@@ -4,7 +4,8 @@ import os
 # --- Load & clean data ---
 # uncomment needed line:
 # input_file = "csvs/all_times.csv"
-input_file = "csvs/only_night.csv"
+# input_file = "csvs/only_night.csv"
+input_file = "csvs/top_times.csv"
 
 df = pd.read_csv(input_file, sep="\t")
 input_filename = (os.path.basename(input_file)).replace(".csv", "")
@@ -28,8 +29,8 @@ df['P/L (Net)'] = (
 df["Date"] = pd.to_datetime(df["Date"], format="%d.%m.%Y")
 
 # === CONFIG ===
-MAX_DD = 3000               # maximum drawdown allowed before "blowup"
-TARGET = 3000               # profit target per run
+MAX_DD = 1500               # maximum drawdown allowed before "blowup"
+TARGET = 1500               # profit target per run
 
 SIZE = 2                    # static lot size (if not using dynamic)
 CONTRACT_STEP = 1000         # add/remove 1 contract per $500 gain/loss
