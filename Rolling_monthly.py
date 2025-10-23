@@ -4,18 +4,18 @@ import os
 # === CONFIGURATION =======================================
 # =========================================================
 
+INPUT_FILE = "csvs/all_times.csv"
 # INPUT_FILE = "csvs/only_night.csv"
-# INPUT_FILE = "csvs/all_times.csv"
-INPUT_FILE = "csvs/top_times.csv"
+# INPUT_FILE = "csvs/top_times.csv"
 
 SEP = "\t"
 input_filename = (os.path.basename(INPUT_FILE)).replace(".csv", "")
 
 MAX_DD = 1500
 TARGET = 1500
-SIZE = 1
+SIZE = 2
 CONTRACT_STEP = 500
-USE_DYNAMIC_LOT = True
+USE_DYNAMIC_LOT = False
 USE_TRAILING_DD = True
 SAVE_CONTRACT_LOG = False       # disable to speed up monthly runs
 MAX_RUNS_TO_LOG = 100

@@ -3,9 +3,9 @@ import os
 
 # --- Load & clean data ---
 # uncomment needed line:
-# input_file = "csvs/all_times.csv"
+input_file = "csvs/all_times.csv"
 # input_file = "csvs/only_night.csv"
-input_file = "csvs/top_times.csv"
+# input_file = "csvs/top_times.csv"
 
 df = pd.read_csv(input_file, sep="\t")
 input_filename = (os.path.basename(input_file)).replace(".csv", "")
