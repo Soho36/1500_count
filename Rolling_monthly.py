@@ -5,8 +5,8 @@ import os
 # =========================================================
 
 # INPUT_FILE = "csvs/only_night.csv"
-# INPUT_FILE = "csvs/all_times.csv"
-INPUT_FILE = "csvs/top_times.csv"
+INPUT_FILE = "csvs/all_times.csv"
+# INPUT_FILE = "csvs/top_times.csv"
 
 SEP = "\t"
 input_filename = (os.path.basename(INPUT_FILE)).replace(".csv", "")

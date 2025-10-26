@@ -33,8 +33,8 @@ df["Date"] = pd.to_datetime(df["Date"], format="%d.%m.%Y")
 # We'll treat daily PnL as the change in Net from previous day
 df["P/L (Net)"] = df["Net"].diff().fillna(df["P/L"].iloc[0] if "P/L" in df.columns else 0)
 
-print("✅ Data columns loaded:", list(df.columns))
-print(df.head())
+# print("✅ Data columns loaded:", list(df.columns))
+# print(df.head())
 
 # === CONFIG ===
 MAX_DD = 3000               # maximum drawdown allowed before "blowup"
@@ -47,7 +47,7 @@ USE_DYNAMIC_LOT = False     # 🔄 switch: True = dynamic lot, False = static
 CONTRACT_STEP = 1000         # add/remove 1 contract per $500 gain/loss
 
 # --- Logging options ---
-SAVE_CONTRACT_LOG = True    # save detailed per-day info for first N runs
+SAVE_CONTRACT_LOG = False    # save detailed per-day info for first N runs
 MAX_RUNS_TO_LOG = 200       # limit detailed log to first N runs
 
 # --- Optional date filter ---
