@@ -112,7 +112,7 @@ for start_idx in range(len(df)):
         if USE_TRAILING_DD:
             if "Hi" in df.columns and "Net" in df.columns:
                 # Include intraday equity highs for a more realistic trailing DD
-                intraday_peak = cumulative_pnl + (df.loc[i, "Close"] - df.loc[i, "Net"])
+                intraday_peak = cumulative_pnl + (df.loc[i, "Hi"] - df.loc[i, "Close"])
                 peak_pnl = max(peak_pnl, intraday_peak)
             else:
                 # Fallback to normal behavior if columns are missing
