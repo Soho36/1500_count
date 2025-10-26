@@ -51,7 +51,7 @@ SAVE_CONTRACT_LOG = True    # save detailed per-day info for first N runs
 MAX_RUNS_TO_LOG = 200       # limit detailed log to first N runs
 
 # --- Optional date filter ---
-START_DATE = None
+START_DATE = "2019-05-23"
 END_DATE = None
 
 if START_DATE or END_DATE:
