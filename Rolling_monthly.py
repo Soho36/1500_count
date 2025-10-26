@@ -13,8 +13,8 @@ INPUT_FILE = "csvs/all_times_2.csv"
 SEP = "\t"
 input_filename = (os.path.basename(INPUT_FILE)).replace(".csv", "")
 
-MAX_DD = 1500
-TARGET = 1500
+MAX_DD = 3000
+TARGET = 3000
 SIZE = 1
 CONTRACT_STEP = 500
 USE_DYNAMIC_LOT = False
