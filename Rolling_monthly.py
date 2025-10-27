@@ -6,15 +6,15 @@ import os
 # =========================================================
 
 # INPUT_FILE = "csvs/all_times.csv"
-# INPUT_FILE = "csvs/top_times.csv"
-INPUT_FILE = "csvs/all_times_2.csv"
+# INPUT_FILE = "csvs/premarket_only.csv"
+INPUT_FILE = "csvs/top_times_only.csv"
 
 SEP = "\t"
 input_filename = (os.path.basename(INPUT_FILE)).replace(".csv", "")
 
-MAX_DD = 3000
-TARGET = 3000
-SIZE = 1
+MAX_DD = 1500
+TARGET = 1500
+SIZE = 2
 CONTRACT_STEP = 500
 USE_DYNAMIC_LOT = False
 USE_TRAILING_DD = True
@@ -228,6 +228,7 @@ file_name = (
     f"{input_filename}_Rolling_Monthly_Report_TR{TARGET}_DD{MAX_DD}_SZ{SIZE}"
     f"_DYN_{USE_DYNAMIC_LOT}_TDD{USE_TRAILING_DD}.xlsx"
 )
+os.makedirs(folder_name, exist_ok=True)
 with pd.ExcelWriter(f"{folder_name}/ {file_name}", engine="xlsxwriter") as writer:
     pivoted_df.to_excel(writer, sheet_name="Rolling_months", index=True)
 
