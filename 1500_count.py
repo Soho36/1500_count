@@ -37,8 +37,8 @@ df["P/L (Net)"] = df["Net"].diff().fillna(df["P/L"].iloc[0] if "P/L" in df.colum
 # print(df.head())
 
 # === CONFIG ===
-MAX_DD = 1500               # maximum drawdown allowed before "blowup"
-TARGET = 1500               # profit target per run
+MAX_DD = 3000               # maximum drawdown allowed before "blowup"
+TARGET = 3000               # profit target per run
 
 SIZE = 1                    # static lot size (if not using dynamic)
 
@@ -51,7 +51,8 @@ SAVE_CONTRACT_LOG = False    # save detailed per-day info for first N runs
 MAX_RUNS_TO_LOG = 200       # limit detailed log to first N runs
 
 # --- Optional date filter ---
-START_DATE = "2025-02-01"
+# START_DATE = "2025-02-01"
+START_DATE = None
 END_DATE = None
 
 if START_DATE or END_DATE:
