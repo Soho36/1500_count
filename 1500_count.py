@@ -1,9 +1,12 @@
 import pandas as pd
 import os
 
-# --- Load & clean data ---
+
 # uncomment needed line:
-input_file = "csvs/all_times.csv"
+
+# input_file = "csvs/all_times.csv"
+input_file = "csvs/all_times_2.csv"
+
 # input_file = "csvs/only_night.csv"
 # input_file = "csvs/top_times.csv"
 
@@ -14,32 +17,42 @@ print(f"📊 Loaded data from: {input_file}")
 pd.set_option('display.width', 1000)
 pd.set_option('display.max_rows', None)
 pd.set_option('display.max_columns', None)
-pd.set_option('display.width', 1000)  # Increase display width
 
-# Clean number formatting
-df['P/L (Net)'] = (
-    df['P/L (Net)']
-    .astype(str)
-    .str.replace(' ', '', regex=False)
-    .str.replace(',', '.', regex=False)
-    .astype(float)
-)
+# --- Clean numeric formatting ---
+for col in ["P/L", "Net", "Hi", "Low", "Open", "Close"]:
+    if col in df.columns:
+        df[col] = (
+            df[col]
+            .astype(str)
+            .str.replace(' ', '', regex=False)
+            .str.replace(',', '.', regex=False)
+            .astype(float)
+        )
 
 # --- Parse dates ---
 df["Date"] = pd.to_datetime(df["Date"], format="%d.%m.%Y")
 
+# --- Create synthetic "P/L (Net)" column for compatibility ---
+# We'll treat daily PnL as the change in Net from previous day
+df["P/L (Net)"] = df["Net"].diff().fillna(df["P/L"].iloc[0] if "P/L" in df.columns else 0)
+
 # === CONFIG ===
-MAX_DD = 1500               # maximum drawdown allowed before "blowup"
-TARGET = 1500               # profit target per run
+MAX_DD = 3000               # maximum drawdown allowed before "blowup"
+TARGET = 3000               # profit target per run
+
 
 SIZE = 1                    # static lot size (if not using dynamic)
 CONTRACT_STEP = 1000         # add/remove 1 contract per $500 gain/loss
 USE_DYNAMIC_LOT = False     # 🔄 switch: True = dynamic lot, False = static
+
 USE_TRAILING_DD = True      # 🔁 switch: True = trailing DD, False = static DD
-SAVE_CONTRACT_LOG = True    # save detailed per-day info for first N runs
-MAX_RUNS_TO_LOG = 100      # limit detailed log to first N runs
+
+# --- Logging options ---
+SAVE_CONTRACT_LOG = False    # save detailed per-day info for first N runs
+MAX_RUNS_TO_LOG = 200       # limit detailed log to first N runs
 
 # --- Optional date filter ---
+
 # START_DATE = "2020-05-01"          # set to None to disable filtering "YYYY-MM-DD"
 # END_DATE = "2020-02-29"             # set to None to disable filtering "YYYY-MM-DD"
 START_DATE = None
@@ -102,9 +115,16 @@ for start_idx in range(len(df)):
         if USE_DYNAMIC_LOT:
             contracts = max(1, 1 + int(cumulative_pnl // CONTRACT_STEP))
 
-        # --- Update DD logic ---
+        # --- Update DD logic (using intraday highs if available) ---
         if USE_TRAILING_DD:
-            peak_pnl = max(peak_pnl, cumulative_pnl)
+            if "Hi" in df.columns and "Net" in df.columns:
+                # Include intraday equity highs for a more realistic trailing DD
+                intraday_peak = cumulative_pnl + (df.loc[i, "Hi"] - df.loc[i, "Close"])
+                peak_pnl = max(peak_pnl, intraday_peak)
+            else:
+                # Fallback to normal behavior if columns are missing
+                peak_pnl = max(peak_pnl, cumulative_pnl)
+
             trailing_floor = peak_pnl - MAX_DD
             dd_breached = cumulative_pnl < trailing_floor
         else:
@@ -286,6 +306,7 @@ filename = \
     f"{input_filename}_dynamic_pnl_growth_report_TR{TARGET}_DD{MAX_DD}_SZ{SIZE}_STEP{CONTRACT_STEP}_TDD{USE_TRAILING_DD}.xlsx" if USE_DYNAMIC_LOT \
     else f"{input_filename}_static_pnl_growth_report_TR{TARGET}_DD{MAX_DD}_SZ{SIZE}_TDD{USE_TRAILING_DD}.xlsx"
 
+os.makedirs(folder, exist_ok=True)  # Ensure folder exists
 with pd.ExcelWriter(f"{folder}/{filename}", engine="xlsxwriter") as writer:
     results_df.to_excel(writer, sheet_name="All Runs", index=False)
     summary_df.to_excel(writer, sheet_name="Summary Stats", index=False)
@@ -306,6 +327,8 @@ if SAVE_CONTRACT_LOG:
     details_path = \
         f"{input_filename}/Logs/{input_filename}_dynamic_contracts_log_TR{TARGET}_DD{MAX_DD}_SZ{SIZE}_STEP{CONTRACT_STEP}_TDD{USE_TRAILING_DD}.csv" if USE_DYNAMIC_LOT \
         else f"{input_filename}/Logs/{input_filename}_static_contracts_log_TR{TARGET}_DD{MAX_DD}_SZ{SIZE}_TDD{USE_TRAILING_DD}.csv"
+
+    os.makedirs(os.path.dirname(details_path), exist_ok=True)
     details_df.to_csv(details_path, index=False, sep="\t")
     print(f"\n📄 Detailed contract log saved to: {details_path}")
 

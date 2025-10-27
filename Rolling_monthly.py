@@ -1,12 +1,13 @@
 import pandas as pd
 import os
+
 # =========================================================
 # === CONFIGURATION =======================================
 # =========================================================
 
-INPUT_FILE = "csvs/all_times.csv"
-# INPUT_FILE = "csvs/only_night.csv"
+# INPUT_FILE = "csvs/all_times.csv"
 # INPUT_FILE = "csvs/top_times.csv"
+INPUT_FILE = "csvs/all_times_2.csv"
 
 SEP = "\t"
 input_filename = (os.path.basename(INPUT_FILE)).replace(".csv", "")
@@ -30,13 +31,25 @@ print(f"📊 Loaded data from: {INPUT_FILE}")
 
 df["Date"] = pd.to_datetime(df["Date"], format="%d.%m.%Y")
 
-df["P/L (Net)"] = (
-    df["P/L (Net)"]
-    .astype(str)
-    .str.replace(" ", "", regex=False)
-    .str.replace(",", ".", regex=False)
-    .astype(float)
-)
+# Clean number formatting if "P/L (Net)" exists
+if "P/L (Net)" in df.columns:
+    df["P/L (Net)"] = (
+        df["P/L (Net)"]
+        .astype(str)
+        .str.replace(" ", "", regex=False)
+        .str.replace(",", ".", regex=False)
+        .astype(float)
+    )
+
+# Clean numeric columns (for extended dataset)
+for col in ["Hi", "Low", "Open", "Close", "Net"]:
+    if col in df.columns:
+        df[col] = (
+            df[col].astype(str)
+            .str.replace(" ", "", regex=False)
+            .str.replace(",", ".", regex=False)
+            .astype(float)
+        )
 
 # =========================================================
 # === CORE SIMULATION FUNCTION ============================
@@ -44,35 +57,53 @@ df["P/L (Net)"] = (
 
 
 def run_simulation(df_slice, start_label=None):
-    """Run a single simulation over the given dataframe slice."""
+    """Run simulation using intraday peaks (Hi) for more realistic DD."""
     results = []
     detailed_log = []
 
-    for start_idx in range(len(df_slice)):
+    # Convert Hi/Close to float
+    for col in ["Hi", "Close"]:
+        df_slice[col] = (
+            df_slice[col]
+            .astype(str)
+            .str.replace(" ", "", regex=False)
+            .str.replace(",", ".", regex=False)
+            .astype(float)
+        )
+
+    for start_idx in range(1, len(df_slice)):  # start from index 1 (need previous day)
         cumulative_pnl = 0
         min_cumulative_pnl = 0
+        peak_pnl = 0
         days = 0
         reached = False
         blown = False
-        peak_pnl = 0
-        # trailing_floor = -MAX_DD
         contracts = SIZE if not USE_DYNAMIC_LOT else 1
         contract_history = []
 
+        prev_close = df_slice.loc[start_idx - 1, "Close"]
+
         for i in range(start_idx, len(df_slice)):
-            pnl_today = df_slice.loc[i, "P/L (Net)"] * (contracts if USE_DYNAMIC_LOT else SIZE)
+            # Daily net change in P/L
+            curr_close = df_slice.loc[i, "Close"]
+            curr_hi = df_slice.loc[i, "Hi"]
+
+            pnl_today = (curr_close - prev_close) * (contracts if USE_DYNAMIC_LOT else SIZE)
+            potential_peak = cumulative_pnl + (curr_hi - prev_close) * (contracts if USE_DYNAMIC_LOT else SIZE)
+
             cumulative_pnl += pnl_today
+            peak_pnl = max(peak_pnl, potential_peak)
             min_cumulative_pnl = min(min_cumulative_pnl, cumulative_pnl)
             days += 1
+            prev_close = curr_close
             contract_history.append(contracts)
 
-            # Update contract size dynamically
+            # Dynamic contracts
             if USE_DYNAMIC_LOT:
                 contracts = max(1, 1 + int(cumulative_pnl // CONTRACT_STEP))
 
-            # Update trailing DD logic
+            # Trailing DD check
             if USE_TRAILING_DD:
-                peak_pnl = max(peak_pnl, cumulative_pnl)
                 trailing_floor = peak_pnl - MAX_DD
                 dd_breached = cumulative_pnl < trailing_floor
             else:
@@ -118,7 +149,7 @@ def run_simulation(df_slice, start_label=None):
                 "Blown": False
             })
 
-    # === Post-analysis ===
+    # === Summarize ===
     results_df = pd.DataFrame(results)
     blown_df = results_df[results_df["Rows_to_blown"].notna()]
     valid = results_df.dropna(subset=["Rows_to_+Target"])
@@ -198,7 +229,7 @@ file_name = (
     f"_DYN_{USE_DYNAMIC_LOT}_TDD{USE_TRAILING_DD}.xlsx"
 )
 with pd.ExcelWriter(f"{folder_name}/ {file_name}", engine="xlsxwriter") as writer:
-    pivoted_df.to_excel(writer,sheet_name="Rolling_months", index=True)
+    pivoted_df.to_excel(writer, sheet_name="Rolling_months", index=True)
 
     # Set column width for "Summary Stats" sheet
     worksheet = writer.sheets["Rolling_months"]
