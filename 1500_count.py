@@ -5,7 +5,7 @@ import os
 # === CONFIG ===
 MAX_DD = 1500               # maximum drawdown allowed before "blowup"
 TARGET = 1500               # profit target per run
-SIZE = 1                    # static lot size (if not using dynamic)
+SIZE = 1.32                    # static lot size (if not using dynamic)
 
 # --- Dynamic lot options ---
 USE_DYNAMIC_LOT = False     # 🔄 switch: True = dynamic lot, False = static
@@ -55,7 +55,7 @@ df["Date"] = pd.to_datetime(df["Date"], format="%d.%m.%Y")
 # We'll treat daily PnL as the change in Net from previous day
 df["P/L (Net)"] = df["Net"].diff().fillna(df["P/L"].iloc[0] if "P/L" in df.columns else 0)
 
-
+# --- Optional date filter ---
 if START_DATE or END_DATE:
     if START_DATE:
         df = df[df["Date"] >= pd.to_datetime(START_DATE)]
