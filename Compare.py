@@ -6,6 +6,10 @@ import numpy as np
 # Read the CSV (adjust separator if needed)
 df_raw = pd.read_csv('compare.csv', sep='\t')
 
+
+START_DATE = "2020-04-01"          # set to None to disable filtering "YYYY-MM-DD"
+END_DATE = "2025-05-01"             # set to None to disable filtering "YYYY-MM-DD"
+
 # Rename columns clearly
 df_raw.columns = ['Date_1', 'PL_1', 'Date_2', 'PL_2']
 
@@ -24,6 +28,13 @@ df2 = df_raw[['Date_2', 'PL_2']].dropna().rename(columns={'Date_2': 'Date'})
 # === Merge by Date ===
 df = pd.merge(df1, df2, on='Date', how='inner').sort_values('Date').reset_index(drop=True)
 print(f"Merged {len(df)} rows after aligning dates.")
+
+# === Filter by date range if specified ===
+if START_DATE:
+    df = df[df['Date'] >= pd.to_datetime(START_DATE)]
+if END_DATE:
+    df = df[df['Date'] <= pd.to_datetime(END_DATE)]
+print(f"Filtered to {len(df)} rows between {START_DATE} and {END_DATE}.")
 
 # Continue with the rest of the script (Combined, Equity, etc.)
 df['Combined'] = df['PL_1'] + df['PL_2']

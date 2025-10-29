@@ -2,11 +2,32 @@ import pandas as pd
 import os
 
 
-# uncomment needed line:
+# === CONFIG ===
+MAX_DD = 1500               # maximum drawdown allowed before "blowup"
+TARGET = 1500               # profit target per run
+SIZE = 1                    # static lot size (if not using dynamic)
+
+# --- Dynamic lot options ---
+USE_DYNAMIC_LOT = False     # 🔄 switch: True = dynamic lot, False = static
+CONTRACT_STEP = 1000         # add/remove 1 contract per $500 gain/loss
+
+# --- Drawdown options ---
+USE_TRAILING_DD = True      # 🔁 switch: True = trailing DD, False = static DD
+
+# --- Logging options ---
+SAVE_CONTRACT_LOG = True    # save detailed per-day info for first N runs
+MAX_RUNS_TO_LOG = 500       # limit detailed log to first N runs
+
+# --- Optional date filter ---
+
+# START_DATE = "2025-05-01"          # set to None to disable filtering "YYYY-MM-DD"
+# END_DATE = "2020-02-29"             # set to None to disable filtering "YYYY-MM-DD"
+START_DATE = None
+END_DATE = None
 
 # input_file = "csvs/all_times.csv"
-# input_file = "csvs/premarket_only.csv"
-input_file = "csvs/top_times_only.csv"
+input_file = "csvs/premarket_only.csv"
+# input_file = "csvs/top_times_only.csv"
 
 df = pd.read_csv(input_file, sep="\t")
 input_filename = (os.path.basename(input_file)).replace(".csv", "")
@@ -34,28 +55,6 @@ df["Date"] = pd.to_datetime(df["Date"], format="%d.%m.%Y")
 # We'll treat daily PnL as the change in Net from previous day
 df["P/L (Net)"] = df["Net"].diff().fillna(df["P/L"].iloc[0] if "P/L" in df.columns else 0)
 
-# === CONFIG ===
-MAX_DD = 1500               # maximum drawdown allowed before "blowup"
-TARGET = 1500               # profit target per run
-SIZE = 2                    # static lot size (if not using dynamic)
-
-# --- Dynamic lot options ---
-USE_DYNAMIC_LOT = False     # 🔄 switch: True = dynamic lot, False = static
-CONTRACT_STEP = 1000         # add/remove 1 contract per $500 gain/loss
-
-# --- Drawdown options ---
-USE_TRAILING_DD = True      # 🔁 switch: True = trailing DD, False = static DD
-
-# --- Logging options ---
-SAVE_CONTRACT_LOG = True    # save detailed per-day info for first N runs
-MAX_RUNS_TO_LOG = 500       # limit detailed log to first N runs
-
-# --- Optional date filter ---
-
-# START_DATE = "2025-05-01"          # set to None to disable filtering "YYYY-MM-DD"
-# END_DATE = "2020-02-29"             # set to None to disable filtering "YYYY-MM-DD"
-START_DATE = None
-END_DATE = None
 
 if START_DATE or END_DATE:
     if START_DATE:
