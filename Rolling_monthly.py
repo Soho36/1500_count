@@ -6,21 +6,23 @@ import os
 # =========================================================
 
 # INPUT_FILE = "csvs/all_times.csv"
-# INPUT_FILE = "csvs/premarket_only.csv"
-INPUT_FILE = "csvs/top_times_only.csv"
+INPUT_FILE = "csvs/premarket_only.csv"
+# INPUT_FILE = "csvs/top_times_only.csv"
 
 SEP = "\t"
 input_filename = (os.path.basename(INPUT_FILE)).replace(".csv", "")
 
-MAX_DD = 1500
-TARGET = 1500
-SIZE = 2
+# Simulation parameters
+MAX_DD = 2500
+TARGET = 3000
+SIZE = 3
+
+# Trailing drawdown settings
+USE_TRAILING_DD = True
+
+# Dynamic lot settings
 CONTRACT_STEP = 500
 USE_DYNAMIC_LOT = False
-USE_TRAILING_DD = True
-SAVE_CONTRACT_LOG = False       # disable to speed up monthly runs
-MAX_RUNS_TO_LOG = 100
-EXPORT_MONTHLY_SUMMARY = True
 
 # =========================================================
 # === LOAD AND CLEAN DATA ================================
