@@ -179,6 +179,16 @@ for start_idx in range(len(df)):
 results_df = pd.DataFrame(results)
 print(results_df)
 
+# --- Average maximum DD (as % of limit)
+if "Max_Drawdown" in results_df.columns:
+    avg_dd = results_df["Max_Drawdown"].mean()
+    median_dd = results_df["Max_Drawdown"].median()
+    avg_dd_pct = (avg_dd / MAX_DD) * 100
+    median_dd_pct = (median_dd / MAX_DD) * 100
+else:
+    avg_dd = median_dd = avg_dd_pct = median_dd_pct = None
+
+
 # --- Blowup stats ---
 blown_df = results_df[results_df['Rows_to_blown'].notna()]
 
@@ -196,6 +206,19 @@ else:
 # --- Stats ---
 valid = results_df.dropna(subset=["Rows_to_+Target"])
 mode_days = valid["Rows_to_+Target"].mode().values
+
+# --- Average maximum DD for blown vs non-blown runs ---
+non_blown = results_df[results_df["Blown"] == False]
+blown = results_df[results_df["Blown"] == True]
+
+avg_dd_all = results_df["Max_Drawdown"].mean()
+avg_dd_nonblown = non_blown["Max_Drawdown"].mean() if not non_blown.empty else None
+avg_dd_blown = blown["Max_Drawdown"].mean() if not blown.empty else None
+
+avg_dd_all_pct = (avg_dd_all / MAX_DD) * 100
+avg_dd_nonblown_pct = (avg_dd_nonblown / MAX_DD) * 100 if avg_dd_nonblown is not None else None
+avg_dd_blown_pct = (avg_dd_blown / MAX_DD) * 100 if avg_dd_blown is not None else None
+
 if not valid.empty:
     print("\n====== SUMMARY STATS ======")
     print("Target:", TARGET)
@@ -220,6 +243,14 @@ if not valid.empty:
     print(f"Median days to blowup: {median_blow_days:.0f}" if median_blow_days is not None else "Median days to blowup: N/A")
     print(f"Mode days to blowup: {mode_blow_days[0]:.0f}" if len(mode_blow_days) > 0 else "Mode days to blowup: N/A")
 
+    print("\n====== DRAWDOWN UTILIZATION ======")
+    print(f"Average Max DD: {avg_dd:.1f}  ({avg_dd_pct:.1f}% of limit)")
+    print(f"Median Max DD: {median_dd:.1f}  ({median_dd_pct:.1f}% of limit)")
+
+    print("\n====== DRAWDOWN BREAKDOWN ======")
+    print(f"Avg Max DD (all runs): {avg_dd_all:.1f} ({avg_dd_all_pct:.1f}% of limit)")
+    print(f"Avg Max DD (non-blown): {avg_dd_nonblown:.1f} ({avg_dd_nonblown_pct:.1f}% of limit)" if avg_dd_nonblown is not None else "Avg Max DD (non-blown): N/A")
+    print(f"Avg Max DD (blown): {avg_dd_blown:.1f} ({avg_dd_blown_pct:.1f}% of limit)" if avg_dd_blown is not None else "Avg Max DD (blown): N/A")
 
 # --- Probability metrics ---
 total_runs = len(results_df)
@@ -253,7 +284,17 @@ summary_data = {
         "Successful runs (%)", "Blowups (%)",
         "",
         "BLOWUPS STATISTICS",
-        "Min days to blowup", "Max days to blowup", "Average days to blowup", "Median days to blowup", "Mode days to blowup"
+        "Min days to blowup", "Max days to blowup", "Average days to blowup", "Median days to blowup", "Mode days to blowup",
+        "",
+        "DRAWDOWN UTILIZATION",
+        "Average Max DD",
+        "Median Max DD",
+        "Average Max DD (%)",
+        "Median Max DD (%)",
+        "",
+        "Average Max DD (all runs)",
+        "Average Max DD (non-blown)",
+        "Average Max DD (blown)",
     ],
     "Value": [
         USE_DYNAMIC_LOT,
@@ -281,7 +322,17 @@ summary_data = {
         max_days_to_blow,
         avg_blow_days,
         median_blow_days,
-        mode_blow_days[0] if len(mode_blow_days) > 0 else None
+        mode_blow_days[0] if len(mode_blow_days) > 0 else None,
+        "",
+        "",
+        avg_dd,
+        median_dd,
+        f"{avg_dd_pct:.1f}%",
+        f"{median_dd_pct:.1f}%",
+        "",
+        avg_dd_all_pct,
+        avg_dd_nonblown_pct,
+        avg_dd_blown_pct
     ]
 }
 summary_df = pd.DataFrame(summary_data)
@@ -306,6 +357,7 @@ filename = \
 
 os.makedirs(folder, exist_ok=True)
 with pd.ExcelWriter(f"{folder}/{filename}", engine="xlsxwriter") as writer:
+    results_df = results_df.sort_values("Start_Date").reset_index(drop=True)
     results_df.to_excel(writer, sheet_name="All Runs", index=False)
     summary_df.to_excel(writer, sheet_name="Summary Stats", index=False)
     hist_data.to_excel(writer, sheet_name="Histogram", index=False)
@@ -318,7 +370,8 @@ with pd.ExcelWriter(f"{folder}/{filename}", engine="xlsxwriter") as writer:
     worksheet.set_column(1, 1, 15)  # Adjust column B width (Value column)
 
     worksheet.set_row(7, None, bold_format)   # Row 1 (index starts at 0)
-    worksheet.set_row(22, None, bold_format)  # Row 5
+    worksheet.set_row(21, None, bold_format)  # Row 5
+    worksheet.set_row(28, None, bold_format)  # Row 9
 
 if SAVE_CONTRACT_LOG:
     details_df = pd.DataFrame(detailed_log)
