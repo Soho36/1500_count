@@ -1,11 +1,11 @@
 import pandas as pd
 import os
-
+import matplotlib.pyplot as plt
 
 # === CONFIG ===
 MAX_DD = 1500               # maximum drawdown allowed before "blowup"
 TARGET = 1500               # profit target per run
-SIZE = 1                    # static lot size (if not using dynamic)
+SIZE = 1.32                    # static lot size (if not using dynamic)
 
 
 # --- Drawdown options ---
@@ -179,6 +179,42 @@ for start_idx in range(len(df)):
 # --- Display results ---
 results_df = pd.DataFrame(results)
 print(results_df)
+
+
+# --- Compute DD% for each run ---
+results_df["DD_%"] = (results_df["Max_Drawdown"] / MAX_DD) * 100
+
+# Bar Chart: Drawdown per Run
+# plt.figure(figsize=(14, 6))
+# plt.bar(range(len(results_df)), results_df["DD_%"], color="steelblue")
+# plt.axhline(100, color="red", linestyle="--", label="Max DD limit (100%)")
+# plt.title(f"Drawdown Utilization per Run (Target={TARGET}, MaxDD={MAX_DD}, Size={SIZE})")
+# plt.xlabel("Run index")
+# plt.ylabel("Max Drawdown (% of limit)")
+# plt.legend()
+# plt.tight_layout()
+
+# Histogram: Distribution of Max DD Used
+plt.figure(figsize=(14, 6))
+plt.hist(results_df["DD_%"], bins=20, color="teal", edgecolor="black")
+plt.axvline(100, color="red", linestyle="--", label="Max DD limit (100%)")
+plt.title(f"Distribution of Maximum Drawdown (% of limit) (Target={TARGET}, MaxDD={MAX_DD}, Size={SIZE})")
+plt.xlabel("Max DD (% of limit)")
+plt.ylabel("Number of runs")
+plt.legend()
+plt.tight_layout()
+
+# Combine with Profit Target Runs
+plt.figure(figsize=(14, 6))
+colors = results_df["Blown"].map({True: "red", False: "green"})
+plt.bar(range(len(results_df)), results_df["DD_%"], color=colors)
+plt.axhline(100, color="black", linestyle="--", label="DD limit (100%)")
+plt.title(f"Drawdown Utilization per Run (Red = Blown, Green = Survived) (Target={TARGET}, MaxDD={MAX_DD}, Size={SIZE})")
+plt.xlabel("Run index")
+plt.ylabel("Max Drawdown (% of limit)")
+plt.legend()
+plt.tight_layout()
+
 
 # --- Average maximum DD (as % of limit)
 if "Max_Drawdown" in results_df.columns:
@@ -387,3 +423,7 @@ if SAVE_CONTRACT_LOG:
 
 print(f"\n✅ Excel report created: {filename}")
 print("   Sheets: [All Runs, Summary Stats, Histogram]")
+
+plt.show()
+save_path = f"{folder}/{filename.replace('.xlsx', '_drawdown_utilization.png')}"
+print(f"✅ Drawdown utilization chart saved to: {save_path}")
