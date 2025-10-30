@@ -5,14 +5,15 @@ import os
 # === CONFIG ===
 MAX_DD = 1500               # maximum drawdown allowed before "blowup"
 TARGET = 1500               # profit target per run
-SIZE = 1.32                    # static lot size (if not using dynamic)
+SIZE = 1                    # static lot size (if not using dynamic)
+
+
+# --- Drawdown options ---
+USE_TRAILING_DD = True      # 🔁 switch: True = trailing DD, False = static DD
 
 # --- Dynamic lot options ---
 USE_DYNAMIC_LOT = False     # 🔄 switch: True = dynamic lot, False = static
 CONTRACT_STEP = 1000         # add/remove 1 contract per $500 gain/loss
-
-# --- Drawdown options ---
-USE_TRAILING_DD = True      # 🔁 switch: True = trailing DD, False = static DD
 
 # --- Logging options ---
 SAVE_CONTRACT_LOG = True    # save detailed per-day info for first N runs

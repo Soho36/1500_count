@@ -1,10 +1,14 @@
 import pandas as pd
 import os
-
+"""
+Then we should update the script in order we can set a number of days to reach the target
+preserving low blowup rate. For example, we want to reach 3000 USD profit in max 30 days - what the size
+can be or what the balance should be?
+"""
 
 # === CONFIG ===
-MAX_DD = 3000
-TARGET = 3000
+MAX_DD = 1500
+TARGET = 1500
 TOLERANCE = 0.005   # 0.005 allows up to 0.5% blowups
 MAX_SIZE = 10.0     # max size to search up to
 PRECISION = 0.01    # size precision for binary search 0.01 is usually more than enough
@@ -78,6 +82,8 @@ def find_safe_size(df, target, max_dd, tol, max_size, precision, max_runs):
 df = pd.read_csv(input_file, sep="\t")
 input_filename = (os.path.basename(input_file)).replace(".csv", "")
 print(f"📊 Loaded data from: {input_file}")
+print(f"MaxDD: {MAX_DD}")
+print(f"Target: {TARGET}\n")
 
 pd.set_option('display.width', 1000)
 pd.set_option('display.max_rows', None)
