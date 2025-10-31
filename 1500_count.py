@@ -17,7 +17,7 @@ CONTRACT_STEP = 1000         # add/remove 1 contract per $500 gain/loss
 
 # --- Logging options ---
 SAVE_CONTRACT_LOG = True    # save detailed per-day info for first N runs
-MAX_RUNS_TO_LOG = 500       # limit detailed log to first N runs
+MAX_RUNS_TO_LOG = 750       # limit detailed log to first N runs
 
 # --- Optional date filter ---
 
