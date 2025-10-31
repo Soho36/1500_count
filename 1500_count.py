@@ -194,20 +194,25 @@ plt.ylabel("Number of runs")
 plt.legend()
 plt.tight_layout()
 
+
 # Combine Red/Green Blow/Success Bar Chart
+colors = results_df["Blown"].map({True: "red", False: "green"})
+x_dates = pd.to_datetime(results_df["Start_Date"])
+
 fig, axs = plt.subplots(2, 1, figsize=(14, 8), sharex=True)
 
 # Chart 1 — DD%
-colors = results_df["Blown"].map({True: "red", False: "green"})
-axs[0].bar(range(len(results_df)), results_df["DD_%"], color=colors)
+axs[0].bar(x_dates, results_df["DD_%"], color=colors)
 axs[0].axhline(100, color="black", linestyle="--", label="DD limit (100%)")
 axs[0].set_ylabel("Max Drawdown (% of limit)")
 axs[0].legend()
 
 # Chart 2 — Days per run
-axs[1].bar( range(len(results_df)), results_df["Days_per_run"], color="dodgerblue", alpha=0.6 )
+axs[1].bar(x_dates, results_df["Days_per_run"], color="dodgerblue", alpha=0.6)
 axs[1].set_ylabel("Days per run")
-axs[1].set_xlabel("Run index")
+axs[1].set_xlabel("Date")
+
+plt.tight_layout()
 
 
 # --- Average maximum DD (as % of limit)
