@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 # === CONFIG ===
 MAX_DD = 1500               # maximum drawdown allowed before "blowup"
 TARGET = 1500               # profit target per run
-SIZE = 1.32                    # static lot size (if not using dynamic)
+SIZE = 2                    # static lot size (if not using dynamic)
 
 
 # --- Drawdown options ---
@@ -183,17 +183,7 @@ print(results_df)
 
 # --- Compute DD% for each run ---
 results_df["DD_%"] = (results_df["Max_Drawdown"] / MAX_DD) * 100
-
-# Bar Chart: Drawdown per Run
-# plt.figure(figsize=(14, 6))
-# plt.bar(range(len(results_df)), results_df["DD_%"], color="steelblue")
-# plt.axhline(100, color="red", linestyle="--", label="Max DD limit (100%)")
-# plt.title(f"Drawdown Utilization per Run (Target={TARGET}, MaxDD={MAX_DD}, Size={SIZE})")
-# plt.xlabel("Run index")
-# plt.ylabel("Max Drawdown (% of limit)")
-# plt.legend()
-# plt.tight_layout()
-
+results_df["Days_per_run"] = results_df.apply( lambda row: row["Rows_to_+Target"] if pd.notna(row["Rows_to_+Target"]) else row["Rows_to_blown"], axis=1 )
 # Histogram: Distribution of Max DD Used
 plt.figure(figsize=(14, 6))
 plt.hist(results_df["DD_%"], bins=20, color="teal", edgecolor="black")
@@ -204,16 +194,20 @@ plt.ylabel("Number of runs")
 plt.legend()
 plt.tight_layout()
 
-# Combine with Profit Target Runs
-plt.figure(figsize=(14, 6))
+# Combine Red/Green Blow/Success Bar Chart
+fig, axs = plt.subplots(2, 1, figsize=(14, 8), sharex=True)
+
+# Chart 1 — DD%
 colors = results_df["Blown"].map({True: "red", False: "green"})
-plt.bar(range(len(results_df)), results_df["DD_%"], color=colors)
-plt.axhline(100, color="black", linestyle="--", label="DD limit (100%)")
-plt.title(f"Drawdown Utilization per Run (Red = Blown, Green = Survived) (Target={TARGET}, MaxDD={MAX_DD}, Size={SIZE})")
-plt.xlabel("Run index")
-plt.ylabel("Max Drawdown (% of limit)")
-plt.legend()
-plt.tight_layout()
+axs[0].bar(range(len(results_df)), results_df["DD_%"], color=colors)
+axs[0].axhline(100, color="black", linestyle="--", label="DD limit (100%)")
+axs[0].set_ylabel("Max Drawdown (% of limit)")
+axs[0].legend()
+
+# Chart 2 — Days per run
+axs[1].bar( range(len(results_df)), results_df["Days_per_run"], color="dodgerblue", alpha=0.6 )
+axs[1].set_ylabel("Days per run")
+axs[1].set_xlabel("Run index")
 
 
 # --- Average maximum DD (as % of limit)
