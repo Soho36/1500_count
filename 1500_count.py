@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 # === CONFIG ===
 MAX_DD = 1500               # maximum drawdown allowed before "blowup"
 TARGET = 1500               # profit target per run
-SIZE = 1                    # static lot size (if not using dynamic)
+SIZE = 2                    # static lot size (if not using dynamic)
 
 
 # --- Drawdown options ---
@@ -26,11 +26,11 @@ MAX_RUNS_TO_LOG = 1500       # limit detailed log to first N runs
 START_DATE = None
 END_DATE = None
 
-input_file = "csvs/all_times.csv"
-# input_file = "csvs/premarket_only.csv"
+# input_file = "csvs/all_times.csv"
+input_file = "csvs/premarket_only.csv"
 # input_file = "csvs/top_times_only.csv"
 
-df = pd.read_csv(input_file, sep="\t")
+dataframe = pd.read_csv(input_file, sep="\t")
 input_filename = (os.path.basename(input_file)).replace(".csv", "")
 print(f"📊 Loaded data from: {input_file}")
 
@@ -40,9 +40,9 @@ pd.set_option('display.max_columns', None)
 
 # --- Clean numeric formatting ---
 for col in ["P/L", "Net", "Hi", "Low", "Open", "Close"]:
-    if col in df.columns:
-        df[col] = (
-            df[col]
+    if col in dataframe.columns:
+        dataframe[col] = (
+            dataframe[col]
             .astype(str)
             .str.replace(' ', '', regex=False)
             .str.replace(',', '.', regex=False)
@@ -50,21 +50,21 @@ for col in ["P/L", "Net", "Hi", "Low", "Open", "Close"]:
         )
 
 # --- Parse dates ---
-df["Date"] = pd.to_datetime(df["Date"], format="%d.%m.%Y")
+dataframe["Date"] = pd.to_datetime(dataframe["Date"], format="%d.%m.%Y")
 
 # --- Create synthetic "P/L (Net)" column for compatibility ---
 # We'll treat daily PnL as the change in Net from previous day
-df["P/L (Net)"] = df["Net"].diff().fillna(df["P/L"].iloc[0] if "P/L" in df.columns else 0)
+dataframe["P/L (Net)"] = dataframe["Net"].diff().fillna(dataframe["P/L"].iloc[0] if "P/L" in dataframe.columns else 0)
 
 # --- Optional date filter ---
 if START_DATE or END_DATE:
     if START_DATE:
-        df = df[df["Date"] >= pd.to_datetime(START_DATE)]
+        dataframe = dataframe[dataframe["Date"] >= pd.to_datetime(START_DATE)]
     if END_DATE:
-        df = df[df["Date"] <= pd.to_datetime(END_DATE)]
-    df = df.sort_values("Date").reset_index(drop=True)
+        dataframe = dataframe[dataframe["Date"] <= pd.to_datetime(END_DATE)]
+    dataframe = dataframe.sort_values("Date").reset_index(drop=True)
     print(f"📅 Data filtered from {START_DATE or 'beginning'} to {END_DATE or 'end'}")
-    print(f"Remaining rows: {len(df)}")
+    print(f"Remaining rows: {len(dataframe)}")
 
 # ==============
 
@@ -72,8 +72,22 @@ if START_DATE or END_DATE:
 results = []
 detailed_log = []
 
+
+def detailed_log_helper(det_log, df, st_idx, ix, cts, pnl_today, cumul_pnl, pk_pnl, trail_floor):
+    """Helper to append a single day's run data to the detailed log."""
+    det_log.append({
+        "Run_Start": df.loc[st_idx, 'Date'],
+        "Date": df.loc[ix, 'Date'],
+        "Contracts": cts,
+        "Cumulative_PnL_Today": round(pnl_today, 2),
+        "Cumulative_PnL": round(cumul_pnl, 2),
+        "Peak_PnL": round(pk_pnl, 2),
+        "Trailing_Floor": round(trail_floor, 2)
+    })
+
+
 # --- Loop through every possible starting date ---
-for start_idx in range(len(df)):
+for start_idx in range(len(dataframe)):
     cumulative_pnl = 0
     min_cumulative_pnl = 0
     days = 0
@@ -88,44 +102,36 @@ for start_idx in range(len(df)):
     contracts = SIZE if not USE_DYNAMIC_LOT else 1
     contract_history = []
 
-    for i in range(start_idx, len(df)):
+    for i in range(start_idx, len(dataframe)):
         # Record contract size
         contract_history.append(contracts)
 
         # --- Apply today's PnL ---
-        pnl_today = df.loc[i, 'P/L (Net)'] * (contracts if not USE_DYNAMIC_LOT else contracts)
-        projected_pnl = cumulative_pnl + pnl_today
+        cumulative_pnl_today = dataframe.loc[i, 'P/L (Net)'] * (contracts if not USE_DYNAMIC_LOT else contracts)
+        projected_pnl = cumulative_pnl + cumulative_pnl_today
         days += 1
 
         # --- Check if today overshoots the target ---
         if projected_pnl >= TARGET:
             # take only the remaining amount needed to reach target
-            pnl_today = TARGET - cumulative_pnl
+            cumulative_pnl_today = TARGET - cumulative_pnl
             cumulative_pnl = TARGET
             min_cumulative_pnl = min(min_cumulative_pnl, cumulative_pnl)
 
             # log the truncated last step
             if SAVE_CONTRACT_LOG and start_idx < MAX_RUNS_TO_LOG:
-                detailed_log.append({
-                    "Run_Start": df.loc[start_idx, 'Date'],
-                    "Date": df.loc[i, 'Date'],
-                    "Contracts": contracts,
-                    "PnL_Today": round(pnl_today, 2),
-                    "Cumulative_PnL": round(cumulative_pnl, 2),
-                    "Peak_PnL": round(peak_pnl, 2),
-                    "Trailing_Floor": round(trailing_floor, 2)
-                })
+                detailed_log_helper(detailed_log, dataframe, start_idx, i, contracts, cumulative_pnl_today, cumulative_pnl, peak_pnl, trailing_floor)
 
             # record the completed run
             results.append({
-                "Start_Date": df.loc[start_idx, 'Date'],
+                "Start_Date": dataframe.loc[start_idx, 'Date'],
                 "Rows_to_+Target": days,
                 "Rows_to_blown": None,
                 "Max_Drawdown": abs(min_cumulative_pnl),
                 "Average_Contracts": sum(contract_history) / len(contract_history) if USE_DYNAMIC_LOT else SIZE,
                 "Minimum_Contracts": min(contract_history) if USE_DYNAMIC_LOT else SIZE,
                 "Maximum_Contracts": max(contract_history) if USE_DYNAMIC_LOT else SIZE,
-                "End_Date": df.loc[i, 'Date'],
+                "End_Date": dataframe.loc[i, 'Date'],
                 "Blown": False
             })
             reached = True
@@ -135,26 +141,14 @@ for start_idx in range(len(df)):
         cumulative_pnl = projected_pnl
         min_cumulative_pnl = min(min_cumulative_pnl, cumulative_pnl)
 
-        # --- save per-day details ---
-        if SAVE_CONTRACT_LOG and start_idx < MAX_RUNS_TO_LOG:
-            detailed_log.append({
-                "Run_Start": df.loc[start_idx, 'Date'],
-                "Date": df.loc[i, 'Date'],
-                "Contracts": contracts,
-                "PnL_Today": round(pnl_today, 2),
-                "Cumulative_PnL": round(cumulative_pnl, 2),
-                "Peak_PnL": round(peak_pnl, 2),
-                "Trailing_Floor": round(trailing_floor, 2)
-            })
-
         # --- Update contract size dynamically (only if enabled) ---
         if USE_DYNAMIC_LOT:
             contracts = max(1, 1 + int(cumulative_pnl // CONTRACT_STEP))
 
         # --- Update DD logic (using intraday highs if available) ---
         if USE_TRAILING_DD:
-            if "Hi" in df.columns and "Net" in df.columns:
-                intraday_peak = cumulative_pnl + (df.loc[i, "Hi"] - df.loc[i, "Close"])
+            if "Hi" in dataframe.columns and "Net" in dataframe.columns:
+                intraday_peak = cumulative_pnl + (dataframe.loc[i, "Hi"] - dataframe.loc[i, "Close"])
                 peak_pnl = max(peak_pnl, intraday_peak)
             else:
                 peak_pnl = max(peak_pnl, cumulative_pnl)
@@ -166,34 +160,29 @@ for start_idx in range(len(df)):
             dd_limit = -MAX_DD
             dd_breached = cumulative_pnl <= dd_limit
 
+            # --- save per-day details ---
+        if SAVE_CONTRACT_LOG and start_idx < MAX_RUNS_TO_LOG:
+            detailed_log_helper(detailed_log, dataframe, start_idx, i, contracts, cumulative_pnl_today, cumulative_pnl, peak_pnl, trailing_floor)
         # --- Check blowup condition ---
         if dd_breached:
             # Cut today’s loss to land exactly on the drawdown limit
             overshoot = dd_limit - cumulative_pnl
-            pnl_today += overshoot
+            cumulative_pnl_today += overshoot
             cumulative_pnl = dd_limit  # precisely hit DD threshold
 
             # Log the truncated last step
             if SAVE_CONTRACT_LOG and start_idx < MAX_RUNS_TO_LOG:
-                detailed_log.append({
-                    "Run_Start": df.loc[start_idx, 'Date'],
-                    "Date": df.loc[i, 'Date'],
-                    "Contracts": contracts,
-                    "PnL_Today": round(pnl_today, 2),
-                    "Cumulative_PnL": round(cumulative_pnl, 2),
-                    "Peak_PnL": round(peak_pnl, 2),
-                    "Trailing_Floor": round(trailing_floor, 2)
-                })
+                detailed_log_helper(detailed_log, dataframe, start_idx, i, contracts, cumulative_pnl_today, cumulative_pnl, peak_pnl, trailing_floor)
 
             results.append({
-                "Start_Date": df.loc[start_idx, 'Date'],
+                "Start_Date": dataframe.loc[start_idx, 'Date'],
                 "Rows_to_+Target": None,
                 "Rows_to_blown": days,
                 "Max_Drawdown": peak_pnl - cumulative_pnl if USE_TRAILING_DD else abs(min_cumulative_pnl),
                 "Average_Contracts": sum(contract_history) / len(contract_history) if USE_DYNAMIC_LOT else SIZE,
                 "Minimum_Contracts": min(contract_history) if USE_DYNAMIC_LOT else SIZE,
                 "Maximum_Contracts": max(contract_history) if USE_DYNAMIC_LOT else SIZE,
-                "End_Date": df.loc[i, 'Date'],
+                "End_Date": dataframe.loc[i, 'Date'],
                 "Blown": True
             })
             blown = True
@@ -202,7 +191,7 @@ for start_idx in range(len(df)):
     # --- If we reach the end without hitting either condition ---
     if not reached and not blown:
         results.append({
-            "Start_Date": df.loc[start_idx, 'Date'],
+            "Start_Date": dataframe.loc[start_idx, 'Date'],
             "Rows_to_+Target": None,
             "Rows_to_blown": None,
             "Max_Drawdown": abs(min_cumulative_pnl),
@@ -221,7 +210,7 @@ print(results_df)
 
 # --- Compute DD% for each run ---
 results_df["DD_%"] = (results_df["Max_Drawdown"] / MAX_DD) * 100
-results_df["Days_per_run"] = results_df.apply( lambda row: row["Rows_to_+Target"] if pd.notna(row["Rows_to_+Target"]) else row["Rows_to_blown"], axis=1 )
+results_df["Days_per_run"] = results_df.apply(lambda row: row["Rows_to_+Target"] if pd.notna(row["Rows_to_+Target"]) else row["Rows_to_blown"], axis=1)
 # Histogram: Distribution of Max DD Used
 plt.figure(figsize=(14, 6))
 plt.hist(results_df["DD_%"], bins=20, color="teal", edgecolor="black")
