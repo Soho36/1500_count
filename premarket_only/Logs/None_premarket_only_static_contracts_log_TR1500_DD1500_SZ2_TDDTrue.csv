@@ -1,4 +1,4 @@
-Run_Start	Date	Contracts	PnL_Today	Cumulative_PnL	Peak_PnL	Trailing_Floor
+Run_Start	Date	Contracts	Cumulative_PnL_Today	Cumulative_PnL	Peak_PnL	Trailing_Floor
 2019-05-24	2019-05-24	2	0.0	0.0	0.0	-1500.0
 2019-05-24	2019-05-27	2	67.0	67.0	67.0	-1433.0
 2019-05-24	2019-05-28	2	55.0	122.0	132.5	-1367.5

@@ -107,7 +107,7 @@ for start_idx in range(len(dataframe)):
         contract_history.append(contracts)
 
         # --- Apply today's PnL ---
-        cumulative_pnl_today = dataframe.loc[i, 'P/L (Net)'] * (contracts if not USE_DYNAMIC_LOT else contracts)
+        cumulative_pnl_today = dataframe.loc[i, 'P/L (Net)'] * contracts
         projected_pnl = cumulative_pnl + cumulative_pnl_today
         days += 1
 
@@ -160,14 +160,15 @@ for start_idx in range(len(dataframe)):
             dd_limit = -MAX_DD
             dd_breached = cumulative_pnl <= dd_limit
 
-            # --- save per-day details ---
+        # --- save per-day details ---
         if SAVE_CONTRACT_LOG and start_idx < MAX_RUNS_TO_LOG:
             detailed_log_helper(detailed_log, dataframe, start_idx, i, contracts, cumulative_pnl_today, cumulative_pnl, peak_pnl, trailing_floor)
+
         # --- Check blowup condition ---
         if dd_breached:
             # Cut today’s loss to land exactly on the drawdown limit
-            overshoot = dd_limit - cumulative_pnl
-            cumulative_pnl_today += overshoot
+            adjustment = dd_limit - cumulative_pnl
+            cumulative_pnl_today += adjustment
             cumulative_pnl = dd_limit  # precisely hit DD threshold
 
             # Log the truncated last step
