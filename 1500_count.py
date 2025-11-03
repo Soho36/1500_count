@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 # === CONFIG ===
 MAX_DD = 1500               # maximum drawdown allowed before "blowup"
 TARGET = 1500               # profit target per run
-SIZE = 2                    # static lot size (if not using dynamic)
+SIZE = 1                    # static lot size (if not using dynamic)
 
 
 # --- Drawdown options ---
@@ -26,17 +26,20 @@ MAX_RUNS_TO_LOG = 1500       # limit detailed log to first N runs
 START_DATE = None
 END_DATE = None
 
-# input_file = "csvs/all_times.csv"
-input_file = "csvs/premarket_only.csv"
+input_file = "csvs/all_times.csv"
+# input_file = "csvs/premarket_only.csv"
 # input_file = "csvs/top_times_only.csv"
+
+SHOW_PLOTS = True  # set to True to display plots interactively
 
 dataframe = pd.read_csv(input_file, sep="\t")
 input_filename = (os.path.basename(input_file)).replace(".csv", "")
 print(f"📊 Loaded data from: {input_file}")
 
+# Output display settings
 pd.set_option('display.width', 1000)
 pd.set_option('display.max_rows', None)
-pd.set_option('display.max_columns', None)
+pd.set_option('display.max_columns', 7)
 
 # --- Clean numeric formatting ---
 for col in ["P/L", "Net", "Hi", "Low", "Open", "Close"]:
@@ -204,14 +207,28 @@ for start_idx in range(len(dataframe)):
         })
 
 
-# --- Display results ---
-results_df = pd.DataFrame(results)
-print(results_df)
+# Monthly subtotals of blown runs
 
+results_df = pd.DataFrame(results)
+results_df["Start_Date"] = pd.to_datetime(results_df["Start_Date"])
+results_df["YearMonth"] = results_df["Start_Date"].dt.to_period("M").astype(str)
+
+# Add a YearMonth column and group by it
+monthly_stats = (
+    results_df.groupby("YearMonth")["Blown"]
+    .apply(lambda x: x.sum())  # counts how many True values
+    .reset_index(name="Blown_Runs")
+)
+# How many total runs started each month and the % blown
+monthly_stats["Total_Runs"] = results_df.groupby("YearMonth")["Blown"].count().values
+monthly_stats["Blown_%"] = (monthly_stats["Blown_Runs"] / monthly_stats["Total_Runs"] * 100).round(2)
+print(results_df)
 
 # --- Compute DD% for each run ---
 results_df["DD_%"] = (results_df["Max_Drawdown"] / MAX_DD) * 100
 results_df["Days_per_run"] = results_df.apply(lambda row: row["Rows_to_+Target"] if pd.notna(row["Rows_to_+Target"]) else row["Rows_to_blown"], axis=1)
+
+
 # Histogram: Distribution of Max DD Used
 plt.figure(figsize=(14, 6))
 plt.hist(results_df["DD_%"], bins=20, color="teal", edgecolor="black")
@@ -241,6 +258,9 @@ axs[1].bar(x_dates, results_df["Days_per_run"], color="dodgerblue", alpha=0.6)
 axs[1].set_ylabel("Days per run")
 axs[1].set_xlabel("Date")
 
+plt.tight_layout()
+
+monthly_stats.plot(x="YearMonth", y="Blown_Runs", kind="bar", title="Blown Runs per Month")
 plt.tight_layout()
 
 
@@ -330,6 +350,8 @@ print(f"Successful runs: {successful} ({successful / resolved_runs * 100:.2f}%)"
 print(f"Blowups: {blowups} ({blowups / resolved_runs * 100:.2f}%)" if resolved_runs > 0 else "Blowups: N/A")
 print(f"Survival probability: {(1 - blowups / resolved_runs) * 100:.2f}%" if resolved_runs > 0 else "Survival probability: N/A")
 
+print("\n=== Monthly Blown Run Statistics ===")
+print(monthly_stats.to_string(index=False))
 
 # --- Summary Sheet ---
 summary_data = {
@@ -426,17 +448,26 @@ with pd.ExcelWriter(f"{folder}/{filename}", engine="xlsxwriter") as writer:
     results_df.to_excel(writer, sheet_name="All Runs", index=False)
     summary_df.to_excel(writer, sheet_name="Summary Stats", index=False)
     hist_data.to_excel(writer, sheet_name="Histogram", index=False)
+    monthly_stats.to_excel(writer, sheet_name="Monthly Blown Stats", index=False)
 
     # Set column width for "Summary Stats" sheet
-    worksheet = writer.sheets["Summary Stats"]
+    worksheet_summary = writer.sheets["Summary Stats"]
+    worksheet_monthly_blown = writer.sheets["Monthly Blown Stats"]
+
     bold_format = writer.book.add_format({"bold": True})  # Define bold format
+    worksheet_summary.set_column(0, 0, 25)  # Adjust column A width (Metric column)
+    worksheet_summary.set_column(1, 1, 15)  # Adjust column B width (Value column)
 
-    worksheet.set_column(0, 0, 25)  # Adjust column A width (Metric column)
-    worksheet.set_column(1, 1, 15)  # Adjust column B width (Value column)
+    worksheet_summary.set_row(7, None, bold_format)   # Row 1 (index starts at 0)
+    worksheet_summary.set_row(21, None, bold_format)  # Row 5
+    worksheet_summary.set_row(28, None, bold_format)  # Row 9
 
-    worksheet.set_row(7, None, bold_format)   # Row 1 (index starts at 0)
-    worksheet.set_row(21, None, bold_format)  # Row 5
-    worksheet.set_row(28, None, bold_format)  # Row 9
+    worksheet_monthly_blown.set_column(0, 0, 15)  # Adjust column A width
+    worksheet_monthly_blown.set_column(1, 1, 15)  # Adjust column B width
+    worksheet_monthly_blown.set_column(2, 2, 15)  # Adjust column C width
+    worksheet_monthly_blown.set_column(3, 3, 15)  # Adjust column D width
+
+# --- Save detailed contract log if enabled ---
 
 if SAVE_CONTRACT_LOG:
     details_df = pd.DataFrame(detailed_log)
@@ -455,4 +486,6 @@ print("   Sheets: [All Runs, Summary Stats, Histogram]")
 save_path = f"{folder}/{filename.replace('.xlsx', '_drawdown_utilization.png')}"
 print(f"✅ Drawdown utilization chart saved to: {save_path}")
 plt.savefig(save_path)
-plt.show()
+
+if SHOW_PLOTS:
+    plt.show()
