@@ -21,9 +21,9 @@ MAX_RUNS_TO_LOG = 1500       # limit detailed log to first N runs
 
 # --- Optional date filter ---
 
-# START_DATE = "2025-05-01"          # set to None to disable filtering "YYYY-MM-DD"
+START_DATE = "2020-01-01"          # set to None to disable filtering "YYYY-MM-DD"
 # END_DATE = "2020-02-29"             # set to None to disable filtering "YYYY-MM-DD"
-START_DATE = None
+# START_DATE = None
 END_DATE = None
 
 input_file = "csvs/all_times_14_flat.csv"
@@ -257,14 +257,20 @@ print(f"✅ Histogram: Distribution of Max DD Used saved to: {save_path}")
 colors = results_df["Blown"].map({True: "red", False: "green"})
 x_dates = pd.to_datetime(results_df["Start_Date"])
 
+# Invert DD% for blown runs so they point downwards
+dd_values = results_df.apply(
+    lambda row: -row["DD_%"] if row["Blown"] else row["DD_%"], axis=1
+)
+
 # noinspection PyTypeChecker
 fig, axs = plt.subplots(2, 1, figsize=(14, 8), sharex=True)
 
 # Chart 1 — DD%
-axs[0].bar(x_dates, results_df["DD_%"], color=colors)
-axs[0].axhline(100, color="black", linestyle="--", label="DD limit (100%)")
+axs[0].bar(x_dates, dd_values, color=colors)
+axs[0].axhline(0, color="black", linestyle="--", linewidth=1)
 axs[0].set_ylabel("Max Drawdown (% of limit)")
-axs[0].legend()
+axs[0].set_title("Red = Blown (down), Green = Success (up)")
+axs[0].legend(["Zero line"], loc="upper left")
 
 # Chart 2 — Days per run
 axs[1].bar(x_dates, results_df["Days_per_run"], color="dodgerblue", alpha=0.6)
