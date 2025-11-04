@@ -5,7 +5,7 @@ import os
 # === CONFIGURATION =======================================
 # =========================================================
 
-# INPUT_FILE = "csvs/all_times.csv"
+# INPUT_FILE = "csvs/all_times_14_flat.csv"
 INPUT_FILE = "csvs/premarket_only.csv"
 # INPUT_FILE = "csvs/top_times_only.csv"
 

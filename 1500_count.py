@@ -26,7 +26,7 @@ MAX_RUNS_TO_LOG = 1500       # limit detailed log to first N runs
 START_DATE = None
 END_DATE = None
 
-input_file = "csvs/all_times.csv"
+input_file = "csvs/all_times_14_flat.csv"
 # input_file = "csvs/premarket_only.csv"
 # input_file = "csvs/top_times_only.csv"
 
@@ -228,7 +228,7 @@ print(results_df)
 results_df["DD_%"] = (results_df["Max_Drawdown"] / MAX_DD) * 100
 results_df["Days_per_run"] = results_df.apply(lambda row: row["Rows_to_+Target"] if pd.notna(row["Rows_to_+Target"]) else row["Rows_to_blown"], axis=1)
 
-
+# --- Plotting_1 ---
 # Histogram: Distribution of Max DD Used
 plt.figure(figsize=(14, 6))
 plt.hist(results_df["DD_%"], bins=20, color="teal", edgecolor="black")
@@ -239,7 +239,20 @@ plt.ylabel("Number of runs")
 plt.legend()
 plt.tight_layout()
 
+# --- Save histogram ---
+folder = f"{input_filename}/Runs_reports_dynamic_lot" if USE_DYNAMIC_LOT \
+    else f"{input_filename}/Runs_reports_static_lot"
+filename = \
+    f"{START_DATE}_{input_filename}_dynamic_pnl_growth_report_TR{TARGET}_DD{MAX_DD}_SZ{SIZE}_STEP{CONTRACT_STEP}_TDD{USE_TRAILING_DD}.xlsx" if USE_DYNAMIC_LOT \
+    else f"{START_DATE}_{input_filename}_static_pnl_growth_report_TR{TARGET}_DD{MAX_DD}_SZ{SIZE}_TDD{USE_TRAILING_DD}.xlsx"
 
+save_path = f"{folder}/{filename.replace('.xlsx', 'Distribution_of_Max_DD_Used.png')}"
+
+os.makedirs(folder, exist_ok=True)
+plt.savefig(save_path)
+print(f"✅ Histogram: Distribution of Max DD Used saved to: {save_path}")
+
+# --- Plotting_2 ---
 # Combine Red/Green Blow/Success Bar Chart
 colors = results_df["Blown"].map({True: "red", False: "green"})
 x_dates = pd.to_datetime(results_df["Start_Date"])
@@ -260,8 +273,38 @@ axs[1].set_xlabel("Date")
 
 plt.tight_layout()
 
-monthly_stats.plot(x="YearMonth", y="Blown_Runs", kind="bar", title="Blown Runs per Month")
+# --- Save combined chart ---
+folder = f"{input_filename}/Runs_reports_dynamic_lot" if USE_DYNAMIC_LOT \
+    else f"{input_filename}/Runs_reports_static_lot"
+filename = \
+    f"{START_DATE}_{input_filename}_dynamic_pnl_growth_report_TR{TARGET}_DD{MAX_DD}_SZ{SIZE}_STEP{CONTRACT_STEP}_TDD{USE_TRAILING_DD}.xlsx" if USE_DYNAMIC_LOT \
+    else f"{START_DATE}_{input_filename}_static_pnl_growth_report_TR{TARGET}_DD{MAX_DD}_SZ{SIZE}_TDD{USE_TRAILING_DD}.xlsx"
+
+save_path = f"{folder}/{filename.replace('.xlsx', 'Combine_Red_Green_Blow_Success_Bar_Chart.png')}"
+
+os.makedirs(folder, exist_ok=True)
+plt.savefig(save_path)
+print(f"✅ Combine_Red_Green_Blow_Success_Bar_Chart saved to: {save_path}")
+
+# --- Plotting_3 ---
+# Year-Monthly Blown Run Statistics chart
+
+monthly_stats.plot(x="YearMonth", y="Blown_Runs", kind="bar", title="Blown Runs per Month", figsize=(14, 8), color="salmon", legend=False)
+
 plt.tight_layout()
+
+# --- Save Year-Monthly Blown Run Statistics chart ---
+folder = f"{input_filename}/Runs_reports_dynamic_lot" if USE_DYNAMIC_LOT \
+    else f"{input_filename}/Runs_reports_static_lot"
+filename = \
+    f"{START_DATE}_{input_filename}_dynamic_pnl_growth_report_TR{TARGET}_DD{MAX_DD}_SZ{SIZE}_STEP{CONTRACT_STEP}_TDD{USE_TRAILING_DD}.xlsx" if USE_DYNAMIC_LOT \
+    else f"{START_DATE}_{input_filename}_static_pnl_growth_report_TR{TARGET}_DD{MAX_DD}_SZ{SIZE}_TDD{USE_TRAILING_DD}.xlsx"
+
+save_path = f"{folder}/{filename.replace('.xlsx', 'Year_Monthly_Blown_Run_Chart.png')}"
+
+os.makedirs(folder, exist_ok=True)
+plt.savefig(save_path)
+print(f"✅ Year_Monthly_Blown_Run_Chart saved to: {save_path}")
 
 
 # --- Average maximum DD (as % of limit)
@@ -482,10 +525,6 @@ if SAVE_CONTRACT_LOG:
 
 print(f"\n✅ Excel report created: {filename}")
 print("   Sheets: [All Runs, Summary Stats, Histogram]")
-
-save_path = f"{folder}/{filename.replace('.xlsx', '_drawdown_utilization.png')}"
-print(f"✅ Drawdown utilization chart saved to: {save_path}")
-plt.savefig(save_path)
 
 if SHOW_PLOTS:
     plt.show()
