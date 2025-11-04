@@ -8,6 +8,8 @@ TARGET = 1500               # profit target per run
 SIZE = 1                    # static lot size (if not using dynamic)
 
 
+OVERLAPPING_RUNS = False  # if False, each run starts after the previous one ends
+
 # --- Drawdown options ---
 USE_TRAILING_DD = True      # 🔁 switch: True = trailing DD, False = static DD
 
@@ -21,9 +23,9 @@ MAX_RUNS_TO_LOG = 1500       # limit detailed log to first N runs
 
 # --- Optional date filter ---
 
-START_DATE = "2020-01-01"          # set to None to disable filtering "YYYY-MM-DD"
+# START_DATE = "2020-01-01"          # set to None to disable filtering "YYYY-MM-DD"
 # END_DATE = "2020-02-29"             # set to None to disable filtering "YYYY-MM-DD"
-# START_DATE = None
+START_DATE = None
 END_DATE = None
 
 input_file = "csvs/all_times_14_flat.csv"
@@ -90,7 +92,8 @@ def detailed_log_helper(det_log, df, st_idx, ix, cts, pnl_today, cumul_pnl, pk_p
 
 
 # --- Loop through every possible starting date ---
-for start_idx in range(len(dataframe)):
+start_idx = 0
+while start_idx < len(dataframe):
     cumulative_pnl = 0
     min_cumulative_pnl = 0
     days = 0
@@ -123,7 +126,8 @@ for start_idx in range(len(dataframe)):
 
             # log the truncated last step
             if SAVE_CONTRACT_LOG and start_idx < MAX_RUNS_TO_LOG:
-                detailed_log_helper(detailed_log, dataframe, start_idx, i, contracts, cumulative_pnl_today, cumulative_pnl, peak_pnl, trailing_floor)
+                detailed_log_helper(detailed_log, dataframe, start_idx, i, contracts,
+                                    cumulative_pnl_today, cumulative_pnl, peak_pnl, trailing_floor)
 
             # record the completed run
             results.append({
@@ -165,7 +169,8 @@ for start_idx in range(len(dataframe)):
 
         # --- save per-day details ---
         if SAVE_CONTRACT_LOG and start_idx < MAX_RUNS_TO_LOG:
-            detailed_log_helper(detailed_log, dataframe, start_idx, i, contracts, cumulative_pnl_today, cumulative_pnl, peak_pnl, trailing_floor)
+            detailed_log_helper(detailed_log, dataframe, start_idx, i, contracts,
+                                cumulative_pnl_today, cumulative_pnl, peak_pnl, trailing_floor)
 
         # --- Check blowup condition ---
         if dd_breached:
@@ -176,7 +181,8 @@ for start_idx in range(len(dataframe)):
 
             # Log the truncated last step
             if SAVE_CONTRACT_LOG and start_idx < MAX_RUNS_TO_LOG:
-                detailed_log_helper(detailed_log, dataframe, start_idx, i, contracts, cumulative_pnl_today, cumulative_pnl, peak_pnl, trailing_floor)
+                detailed_log_helper(detailed_log, dataframe, start_idx, i, contracts,
+                                    cumulative_pnl_today, cumulative_pnl, peak_pnl, trailing_floor)
 
             results.append({
                 "Start_Date": dataframe.loc[start_idx, 'Date'],
@@ -205,6 +211,16 @@ for start_idx in range(len(dataframe)):
             "End_Date": None,
             "Blown": False
         })
+
+    # --- Advance start index depending on mode ---
+    if OVERLAPPING_RUNS:
+        start_idx += 1  # traditional mode — start next day
+    else:
+        # jump to the next day after this run ended
+        if reached or blown:
+            start_idx = i + 1
+        else:
+            start_idx += 1  # if it never finished, just move by one anyway
 
 
 # Monthly subtotals of blown runs
