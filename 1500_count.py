@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 # === CONFIG ===
 MAX_DD = 1500               # maximum drawdown allowed before "blowup"
 TARGET = 1500               # profit target per run
-SIZE = 1                    # static lot size (if not using dynamic)
+SIZE = 3                    # static lot size (if not using dynamic)
 
 
 OVERLAPPING_RUNS = False  # if False, each run starts after the previous one ends
@@ -28,8 +28,8 @@ MAX_RUNS_TO_LOG = 1500       # limit detailed log to first N runs
 START_DATE = None
 END_DATE = None
 
-input_file = "csvs/all_times_14_flat.csv"
-# input_file = "csvs/premarket_only.csv"
+# input_file = "csvs/all_times_14_flat.csv"
+input_file = "csvs/premarket_only.csv"
 # input_file = "csvs/top_times_only.csv"
 
 SHOW_PLOTS = True  # set to True to display plots interactively
@@ -238,6 +238,7 @@ monthly_stats = (
 # How many total runs started each month and the % blown
 monthly_stats["Total_Runs"] = results_df.groupby("YearMonth")["Blown"].count().values
 monthly_stats["Blown_%"] = (monthly_stats["Blown_Runs"] / monthly_stats["Total_Runs"] * 100).round(2)
+monthly_stats["Successful_Runs"] = monthly_stats["Total_Runs"] - monthly_stats["Blown_Runs"]
 print(results_df)
 
 # --- Compute DD% for each run ---
@@ -256,15 +257,22 @@ plt.legend()
 plt.tight_layout()
 
 # --- Save histogram ---
-folder = f"{input_filename}/Runs_reports_dynamic_lot" if USE_DYNAMIC_LOT \
-    else f"{input_filename}/Runs_reports_static_lot"
-filename = \
-    f"{START_DATE}_{input_filename}_dynamic_pnl_growth_report_TR{TARGET}_DD{MAX_DD}_SZ{SIZE}_STEP{CONTRACT_STEP}_TDD{USE_TRAILING_DD}.xlsx" if USE_DYNAMIC_LOT \
-    else f"{START_DATE}_{input_filename}_static_pnl_growth_report_TR{TARGET}_DD{MAX_DD}_SZ{SIZE}_TDD{USE_TRAILING_DD}.xlsx"
+if USE_DYNAMIC_LOT and OVERLAPPING_RUNS:
+    details_path = f"{input_filename}/Runs_reports_dynamic_lot/{START_DATE}_{input_filename}_dynamic_TR{TARGET}_DD{MAX_DD}_SZ{SIZE}_STEP{CONTRACT_STEP}_TDD{USE_TRAILING_DD}_overlapping.xlsx"
+elif not USE_DYNAMIC_LOT and OVERLAPPING_RUNS:
+    details_path = f"{input_filename}/Runs_reports_static_lot/{START_DATE}_{input_filename}_static_TR{TARGET}_DD{MAX_DD}_SZ{SIZE}_TDD{USE_TRAILING_DD}_overlapping.xlsx"
+elif USE_DYNAMIC_LOT and not OVERLAPPING_RUNS:
+    details_path = f"{input_filename}/Runs_reports_dynamic_lot/{START_DATE}_{input_filename}_dynamic_TR{TARGET}_DD{MAX_DD}_SZ{SIZE}_STEP{CONTRACT_STEP}_TDD{USE_TRAILING_DD}_nooverlap.xlsx"
+else:  # not USE_DYNAMIC_LOT and not OVERLAPPING_RUNS
+    details_path = f"{input_filename}/Runs_reports_static_lot/{START_DATE}_{input_filename}_static_TR{TARGET}_DD{MAX_DD}_SZ{SIZE}_TDD{USE_TRAILING_DD}_nooverlap.xlsx"
 
-save_path = f"{folder}/{filename.replace('.xlsx', 'Distribution_of_Max_DD_Used.png')}"
+# Extract directory from details_path and create save path
+directory = os.path.dirname(details_path)
+filename_without_ext = os.path.splitext(os.path.basename(details_path))[0]
+save_path = os.path.join(directory, f"{filename_without_ext}_Distribution_of_Max_DD_Used.png")
 
-os.makedirs(folder, exist_ok=True)
+# Create directory if it doesn't exist
+os.makedirs(directory, exist_ok=True)
 plt.savefig(save_path)
 print(f"✅ Histogram: Distribution of Max DD Used saved to: {save_path}")
 
@@ -296,15 +304,22 @@ axs[1].set_xlabel("Date")
 plt.tight_layout()
 
 # --- Save combined chart ---
-folder = f"{input_filename}/Runs_reports_dynamic_lot" if USE_DYNAMIC_LOT \
-    else f"{input_filename}/Runs_reports_static_lot"
-filename = \
-    f"{START_DATE}_{input_filename}_dynamic_pnl_growth_report_TR{TARGET}_DD{MAX_DD}_SZ{SIZE}_STEP{CONTRACT_STEP}_TDD{USE_TRAILING_DD}.xlsx" if USE_DYNAMIC_LOT \
-    else f"{START_DATE}_{input_filename}_static_pnl_growth_report_TR{TARGET}_DD{MAX_DD}_SZ{SIZE}_TDD{USE_TRAILING_DD}.xlsx"
+if USE_DYNAMIC_LOT and OVERLAPPING_RUNS:
+    details_path = f"{input_filename}/Runs_reports_dynamic_lot/{START_DATE}_{input_filename}_dynamic_TR{TARGET}_DD{MAX_DD}_SZ{SIZE}_STEP{CONTRACT_STEP}_TDD{USE_TRAILING_DD}_overlapping.xlsx"
+elif not USE_DYNAMIC_LOT and OVERLAPPING_RUNS:
+    details_path = f"{input_filename}/Runs_reports_static_lot/{START_DATE}_{input_filename}_static_TR{TARGET}_DD{MAX_DD}_SZ{SIZE}_TDD{USE_TRAILING_DD}_overlapping.xlsx"
+elif USE_DYNAMIC_LOT and not OVERLAPPING_RUNS:
+    details_path = f"{input_filename}/Runs_reports_dynamic_lot/{START_DATE}_{input_filename}_dynamic_TR{TARGET}_DD{MAX_DD}_SZ{SIZE}_STEP{CONTRACT_STEP}_TDD{USE_TRAILING_DD}_nooverlap.xlsx"
+else:  # not USE_DYNAMIC_LOT and not OVERLAPPING_RUNS
+    details_path = f"{input_filename}/Runs_reports_static_lot/{START_DATE}_{input_filename}_static_TR{TARGET}_DD{MAX_DD}_SZ{SIZE}_TDD{USE_TRAILING_DD}_nooverlap.xlsx"
 
-save_path = f"{folder}/{filename.replace('.xlsx', 'Combine_Red_Green_Blow_Success_Bar_Chart.png')}"
+# Extract directory from details_path and create save path
+directory = os.path.dirname(details_path)
+filename_without_ext = os.path.splitext(os.path.basename(details_path))[0]
+save_path = os.path.join(directory, f'{filename_without_ext}_Combine_Red_Green_Blow_Success_Bar_Chart.png')
 
-os.makedirs(folder, exist_ok=True)
+# Create directory if it doesn't exist
+os.makedirs(directory, exist_ok=True)
 plt.savefig(save_path)
 print(f"✅ Combine_Red_Green_Blow_Success_Bar_Chart saved to: {save_path}")
 
@@ -316,18 +331,25 @@ monthly_stats.plot(x="YearMonth", y="Blown_Runs", kind="bar", title="Blown Runs 
 plt.tight_layout()
 
 # --- Save Year-Monthly Blown Run Statistics chart ---
-folder = f"{input_filename}/Runs_reports_dynamic_lot" if USE_DYNAMIC_LOT \
-    else f"{input_filename}/Runs_reports_static_lot"
-filename = \
-    f"{START_DATE}_{input_filename}_dynamic_pnl_growth_report_TR{TARGET}_DD{MAX_DD}_SZ{SIZE}_STEP{CONTRACT_STEP}_TDD{USE_TRAILING_DD}.xlsx" if USE_DYNAMIC_LOT \
-    else f"{START_DATE}_{input_filename}_static_pnl_growth_report_TR{TARGET}_DD{MAX_DD}_SZ{SIZE}_TDD{USE_TRAILING_DD}.xlsx"
 
-save_path = f"{folder}/{filename.replace('.xlsx', 'Year_Monthly_Blown_Run_Chart.png')}"
+if USE_DYNAMIC_LOT and OVERLAPPING_RUNS:
+    details_path = f"{input_filename}/Runs_reports_dynamic_lot/{START_DATE}_{input_filename}_dynamic_TR{TARGET}_DD{MAX_DD}_SZ{SIZE}_STEP{CONTRACT_STEP}_TDD{USE_TRAILING_DD}_overlapping.xlsx"
+elif not USE_DYNAMIC_LOT and OVERLAPPING_RUNS:
+    details_path = f"{input_filename}/Runs_reports_static_lot/{START_DATE}_{input_filename}_static_TR{TARGET}_DD{MAX_DD}_SZ{SIZE}_TDD{USE_TRAILING_DD}_overlapping.xlsx"
+elif USE_DYNAMIC_LOT and not OVERLAPPING_RUNS:
+    details_path = f"{input_filename}/Runs_reports_dynamic_lot/{START_DATE}_{input_filename}_dynamic_TR{TARGET}_DD{MAX_DD}_SZ{SIZE}_STEP{CONTRACT_STEP}_TDD{USE_TRAILING_DD}_nooverlap.xlsx"
+else:  # not USE_DYNAMIC_LOT and not OVERLAPPING_RUNS
+    details_path = f"{input_filename}/Runs_reports_static_lot/{START_DATE}_{input_filename}_static_TR{TARGET}_DD{MAX_DD}_SZ{SIZE}_TDD{USE_TRAILING_DD}_nooverlap.xlsx"
 
-os.makedirs(folder, exist_ok=True)
+# Extract directory from details_path and create save path
+directory = os.path.dirname(details_path)
+filename_without_ext = os.path.splitext(os.path.basename(details_path))[0]
+save_path = os.path.join(directory, f'{filename_without_ext}_Year_Monthly_Blown_Run_Chart.png')
+
+# Create directory if it doesn't exist
+os.makedirs(directory, exist_ok=True)
 plt.savefig(save_path)
 print(f"✅ Year_Monthly_Blown_Run_Chart saved to: {save_path}")
-
 
 # --- Average maximum DD (as % of limit)
 if "Max_Drawdown" in results_df.columns:
@@ -502,13 +524,22 @@ else:
     hist_data = pd.DataFrame(columns=["Days", "Took_days"])
 
 # --- Save all to Excel ---
-folder = f"{input_filename}/Runs_reports_dynamic_lot" if USE_DYNAMIC_LOT else f"{input_filename}/Runs_reports_static_lot"
-filename = \
-    f"{START_DATE}_{input_filename}_dynamic_pnl_growth_report_TR{TARGET}_DD{MAX_DD}_SZ{SIZE}_STEP{CONTRACT_STEP}_TDD{USE_TRAILING_DD}.xlsx" if USE_DYNAMIC_LOT \
-    else f"{START_DATE}_{input_filename}_static_pnl_growth_report_TR{TARGET}_DD{MAX_DD}_SZ{SIZE}_TDD{USE_TRAILING_DD}.xlsx"
+if USE_DYNAMIC_LOT and OVERLAPPING_RUNS:
+    details_path = f"{input_filename}/Runs_reports_dynamic_lot/{START_DATE}_{input_filename}_dynamic_pnl_growth_report_TR{TARGET}_DD{MAX_DD}_SZ{SIZE}_STEP{CONTRACT_STEP}_TDD{USE_TRAILING_DD}_overlapping.xlsx"
+elif not USE_DYNAMIC_LOT and OVERLAPPING_RUNS:
+    details_path = f"{input_filename}/Runs_reports_static_lot/{START_DATE}_{input_filename}_static_pnl_growth_report_TR{TARGET}_DD{MAX_DD}_SZ{SIZE}_TDD{USE_TRAILING_DD}_overlapping.xlsx"
+elif USE_DYNAMIC_LOT and not OVERLAPPING_RUNS:
+    details_path = f"{input_filename}/Runs_reports_dynamic_lot/{START_DATE}_{input_filename}_dynamic_pnl_growth_report_TR{TARGET}_DD{MAX_DD}_SZ{SIZE}_STEP{CONTRACT_STEP}_TDD{USE_TRAILING_DD}_nooverlap.xlsx"
+else:  # not USE_DYNAMIC_LOT and not OVERLAPPING_RUNS
+    details_path = f"{input_filename}/Runs_reports_static_lot/{START_DATE}_{input_filename}_static_pnl_growth_report_TR{TARGET}_DD{MAX_DD}_SZ{SIZE}_TDD{USE_TRAILING_DD}_nooverlap.xlsx"
 
-os.makedirs(folder, exist_ok=True)
-with pd.ExcelWriter(f"{folder}/{filename}", engine="xlsxwriter") as writer:
+# Extract directory from details_path and create save path
+directory = os.path.dirname(details_path)
+
+# Create directory if it doesn't exist
+os.makedirs(directory, exist_ok=True)
+
+with pd.ExcelWriter(f"{details_path}", engine="xlsxwriter") as writer:
     results_df = results_df.sort_values("Start_Date").reset_index(drop=True)
     results_df.to_excel(writer, sheet_name="All Runs", index=False)
     summary_df.to_excel(writer, sheet_name="Summary Stats", index=False)
@@ -536,16 +567,22 @@ with pd.ExcelWriter(f"{folder}/{filename}", engine="xlsxwriter") as writer:
 
 if SAVE_CONTRACT_LOG:
     details_df = pd.DataFrame(detailed_log)
-    details_path = \
-        f"{input_filename}/Logs/{START_DATE}_{input_filename}_dynamic_contracts_log_TR{TARGET}_DD{MAX_DD}_SZ{SIZE}_STEP{CONTRACT_STEP}_TDD{USE_TRAILING_DD}.csv" if USE_DYNAMIC_LOT \
-        else f"{input_filename}/Logs/{START_DATE}_{input_filename}_static_contracts_log_TR{TARGET}_DD{MAX_DD}_SZ{SIZE}_TDD{USE_TRAILING_DD}.csv"
+
+    if USE_DYNAMIC_LOT and OVERLAPPING_RUNS:
+        details_path = f"{input_filename}/Logs/{START_DATE}_{input_filename}_dynamic_contracts_log_TR{TARGET}_DD{MAX_DD}_SZ{SIZE}_STEP{CONTRACT_STEP}_TDD{USE_TRAILING_DD}_overlapping.csv"
+    elif not USE_DYNAMIC_LOT and OVERLAPPING_RUNS:
+        details_path = f"{input_filename}/Logs/{START_DATE}_{input_filename}_static_contracts_log_TR{TARGET}_DD{MAX_DD}_SZ{SIZE}_TDD{USE_TRAILING_DD}_overlapping.csv"
+    elif USE_DYNAMIC_LOT and not OVERLAPPING_RUNS:
+        details_path = f"{input_filename}/Logs/{START_DATE}_{input_filename}_dynamic_contracts_log_TR{TARGET}_DD{MAX_DD}_SZ{SIZE}_STEP{CONTRACT_STEP}_TDD{USE_TRAILING_DD}_nooverlap.csv"
+    else:   # not USE_DYNAMIC_LOT and not OVERLAPPING_RUNS
+        details_path = f"{input_filename}/Logs/{START_DATE}_{input_filename}_static_contracts_log_TR{TARGET}_DD{MAX_DD}_SZ{SIZE}_TDD{USE_TRAILING_DD}_nooverlap.csv"
 
     os.makedirs(os.path.dirname(details_path), exist_ok=True)
     details_df.to_csv(details_path, index=False, sep="\t")
     print(f"\n📄 Detailed contract log saved to: {details_path}")
 
-
-print(f"\n✅ Excel report created: {filename}")
+report_filename = os.path.basename(details_path)
+print(f"\n✅ Excel report created: {report_filename}")
 print("   Sheets: [All Runs, Summary Stats, Histogram]")
 
 if SHOW_PLOTS:
