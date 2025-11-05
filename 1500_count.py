@@ -5,10 +5,9 @@ import matplotlib.pyplot as plt
 # === CONFIG ===
 MAX_DD = 1500               # maximum drawdown allowed before "blowup"
 TARGET = 1500               # profit target per run
-SIZE = 3                    # static lot size (if not using dynamic)
+SIZE = 2                    # static lot size (if not using dynamic)
 
-
-OVERLAPPING_RUNS = False  # if False, each run starts after the previous one ends
+OVERLAPPING_RUNS = True  # if False, each run starts after the previous one ends
 
 # --- Drawdown options ---
 USE_TRAILING_DD = True      # 🔁 switch: True = trailing DD, False = static DD
@@ -562,6 +561,7 @@ with pd.ExcelWriter(f"{details_path}", engine="xlsxwriter") as writer:
     worksheet_monthly_blown.set_column(1, 1, 15)  # Adjust column B width
     worksheet_monthly_blown.set_column(2, 2, 15)  # Adjust column C width
     worksheet_monthly_blown.set_column(3, 3, 15)  # Adjust column D width
+    worksheet_monthly_blown.set_column(4, 4, 15)  # Adjust column E width
 
 # --- Save detailed contract log if enabled ---
 
