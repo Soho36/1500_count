@@ -5,9 +5,15 @@ import matplotlib.pyplot as plt
 # === CONFIG ===
 MAX_DD = 1500               # maximum drawdown allowed before "blowup"
 TARGET = 1500               # profit target per run
-SIZE = 2                    # static lot size (if not using dynamic)
+SIZE = 3                    # static lot size (if not using dynamic)
 
-OVERLAPPING_RUNS = True  # if False, each run starts after the previous one ends
+# --- Run scheduling mode ---
+# Options: "OVERLAPPING", "SEQUENTIAL", "MONTHLY"
+# RUN_MODE = "OVERLAPPING"
+RUN_MODE = "SEQUENTIAL"
+# RUN_MODE = "MONTHLY"
+
+RUNS_PER_MONTH = 2  # how many new runs to start per month (if MONTHLY)
 
 # --- Drawdown options ---
 USE_TRAILING_DD = True      # 🔁 switch: True = trailing DD, False = static DD
@@ -68,7 +74,7 @@ if START_DATE or END_DATE:
         dataframe = dataframe[dataframe["Date"] <= pd.to_datetime(END_DATE)]
     dataframe = dataframe.sort_values("Date").reset_index(drop=True)
     print(f"📅 Data filtered from {START_DATE or 'beginning'} to {END_DATE or 'end'}")
-    print(f"Remaining rows: {len(dataframe)}")
+    # print(f"Remaining rows: {len(dataframe)}")
 
 # ==============
 
@@ -90,9 +96,24 @@ def detailed_log_helper(det_log, df, st_idx, ix, cts, pnl_today, cumul_pnl, pk_p
     })
 
 
+# --- Prepare list of start indices depending on mode ---
+if RUN_MODE == "MONTHLY":
+    dataframe["YearMonth"] = pd.to_datetime(dataframe["Date"]).dt.to_period("M")
+    start_indices = (
+        dataframe.groupby("YearMonth")
+        .head(RUNS_PER_MONTH)
+        .index
+        .tolist()
+    )
+else:
+    start_indices = list(range(len(dataframe)))
+
 # --- Loop through every possible starting date ---
-start_idx = 0
-while start_idx < len(dataframe):
+start_idx_pointer = 0
+
+# --- Main simulation loop ---
+while start_idx_pointer < len(start_indices):
+    start_idx = start_indices[start_idx_pointer]
     cumulative_pnl = 0
     min_cumulative_pnl = 0
     days = 0
@@ -107,6 +128,7 @@ while start_idx < len(dataframe):
     contracts = SIZE if not USE_DYNAMIC_LOT else 1
     contract_history = []
 
+    # --- iterate through data until run ends or dataset ends ---
     for i in range(start_idx, len(dataframe)):
         # Record contract size
         contract_history.append(contracts)
@@ -125,8 +147,11 @@ while start_idx < len(dataframe):
 
             # log the truncated last step
             if SAVE_CONTRACT_LOG and start_idx < MAX_RUNS_TO_LOG:
-                detailed_log_helper(detailed_log, dataframe, start_idx, i, contracts,
-                                    cumulative_pnl_today, cumulative_pnl, peak_pnl, trailing_floor)
+                detailed_log_helper(
+                    detailed_log, dataframe, start_idx, i,
+                    contracts, cumulative_pnl_today, cumulative_pnl,
+                    peak_pnl, trailing_floor
+                )
 
             # record the completed run
             results.append({
@@ -151,7 +176,7 @@ while start_idx < len(dataframe):
         if USE_DYNAMIC_LOT:
             contracts = max(1, 1 + int(cumulative_pnl // CONTRACT_STEP))
 
-        # --- Update DD logic (using intraday highs if available) ---
+        # --- Update DD logic ---
         if USE_TRAILING_DD:
             if "Hi" in dataframe.columns and "Net" in dataframe.columns:
                 intraday_peak = cumulative_pnl + (dataframe.loc[i, "Hi"] - dataframe.loc[i, "Close"])
@@ -168,8 +193,11 @@ while start_idx < len(dataframe):
 
         # --- save per-day details ---
         if SAVE_CONTRACT_LOG and start_idx < MAX_RUNS_TO_LOG:
-            detailed_log_helper(detailed_log, dataframe, start_idx, i, contracts,
-                                cumulative_pnl_today, cumulative_pnl, peak_pnl, trailing_floor)
+            detailed_log_helper(
+                detailed_log, dataframe, start_idx, i,
+                contracts, cumulative_pnl_today, cumulative_pnl,
+                peak_pnl, trailing_floor
+            )
 
         # --- Check blowup condition ---
         if dd_breached:
@@ -180,8 +208,11 @@ while start_idx < len(dataframe):
 
             # Log the truncated last step
             if SAVE_CONTRACT_LOG and start_idx < MAX_RUNS_TO_LOG:
-                detailed_log_helper(detailed_log, dataframe, start_idx, i, contracts,
-                                    cumulative_pnl_today, cumulative_pnl, peak_pnl, trailing_floor)
+                detailed_log_helper(
+                    detailed_log, dataframe, start_idx, i,
+                    contracts, cumulative_pnl_today, cumulative_pnl,
+                    peak_pnl, trailing_floor
+                )
 
             results.append({
                 "Start_Date": dataframe.loc[start_idx, 'Date'],
@@ -212,14 +243,24 @@ while start_idx < len(dataframe):
         })
 
     # --- Advance start index depending on mode ---
-    if OVERLAPPING_RUNS:
-        start_idx += 1  # traditional mode — start next day
-    else:
-        # jump to the next day after this run ended
+    if RUN_MODE == "OVERLAPPING":
+        start_idx_pointer += 1
+
+    elif RUN_MODE == "SEQUENTIAL":
         if reached or blown:
-            start_idx = i + 1
+            start_idx_pointer += 1  # move to next start index after current run
+            if i + 1 < len(dataframe):
+                # skip future starts until after current run end
+                next_starts = [idx for idx in start_indices if idx > i]
+                if next_starts:
+                    start_idx_pointer = start_indices.index(next_starts[0])
+                else:
+                    break
         else:
-            start_idx += 1  # if it never finished, just move by one anyway
+            start_idx_pointer += 1
+
+    elif RUN_MODE == "MONTHLY":
+        start_idx_pointer += 1
 
 
 # Monthly subtotals of blown runs
@@ -238,7 +279,7 @@ monthly_stats = (
 monthly_stats["Total_Runs"] = results_df.groupby("YearMonth")["Blown"].count().values
 monthly_stats["Blown_%"] = (monthly_stats["Blown_Runs"] / monthly_stats["Total_Runs"] * 100).round(2)
 monthly_stats["Successful_Runs"] = monthly_stats["Total_Runs"] - monthly_stats["Blown_Runs"]
-print(results_df)
+# print(results_df)
 
 # --- Compute DD% for each run ---
 results_df["DD_%"] = (results_df["Max_Drawdown"] / MAX_DD) * 100
@@ -255,15 +296,51 @@ plt.ylabel("Number of runs")
 plt.legend()
 plt.tight_layout()
 
+
 # --- Save histogram ---
-if USE_DYNAMIC_LOT and OVERLAPPING_RUNS:
-    details_path = f"{input_filename}/Runs_reports_dynamic_lot/{START_DATE}_{input_filename}_dynamic_TR{TARGET}_DD{MAX_DD}_SZ{SIZE}_STEP{CONTRACT_STEP}_TDD{USE_TRAILING_DD}_overlapping.xlsx"
-elif not USE_DYNAMIC_LOT and OVERLAPPING_RUNS:
-    details_path = f"{input_filename}/Runs_reports_static_lot/{START_DATE}_{input_filename}_static_TR{TARGET}_DD{MAX_DD}_SZ{SIZE}_TDD{USE_TRAILING_DD}_overlapping.xlsx"
-elif USE_DYNAMIC_LOT and not OVERLAPPING_RUNS:
-    details_path = f"{input_filename}/Runs_reports_dynamic_lot/{START_DATE}_{input_filename}_dynamic_TR{TARGET}_DD{MAX_DD}_SZ{SIZE}_STEP{CONTRACT_STEP}_TDD{USE_TRAILING_DD}_nooverlap.xlsx"
-else:  # not USE_DYNAMIC_LOT and not OVERLAPPING_RUNS
-    details_path = f"{input_filename}/Runs_reports_static_lot/{START_DATE}_{input_filename}_static_TR{TARGET}_DD{MAX_DD}_SZ{SIZE}_TDD{USE_TRAILING_DD}_nooverlap.xlsx"
+# --- Construct save path depending on lot type, overlap mode, and monthly mode ---
+if RUN_MODE == "MONTHLY":
+    if USE_DYNAMIC_LOT:
+        details_path = (
+            f"{input_filename}/Runs_reports_dynamic_lot/"
+            f"{START_DATE}_{input_filename}_dynamic_TR{TARGET}_DD{MAX_DD}_SZ{SIZE}_STEP{CONTRACT_STEP}_"
+            f"TDD{USE_TRAILING_DD}_monthly.xlsx"
+        )
+    else:
+        details_path = (
+            f"{input_filename}/Runs_reports_static_lot/"
+            f"{START_DATE}_{input_filename}_static_TR{TARGET}_DD{MAX_DD}_SZ{SIZE}_"
+            f"TDD{USE_TRAILING_DD}_monthly.xlsx"
+        )
+
+elif RUN_MODE == "OVERLAPPING":
+    if USE_DYNAMIC_LOT:
+        details_path = (
+            f"{input_filename}/Runs_reports_dynamic_lot/"
+            f"{START_DATE}_{input_filename}_dynamic_TR{TARGET}_DD{MAX_DD}_SZ{SIZE}_STEP{CONTRACT_STEP}_"
+            f"TDD{USE_TRAILING_DD}_overlapping.xlsx"
+        )
+    else:
+        details_path = (
+            f"{input_filename}/Runs_reports_static_lot/"
+            f"{START_DATE}_{input_filename}_static_TR{TARGET}_DD{MAX_DD}_SZ{SIZE}_"
+            f"TDD{USE_TRAILING_DD}_overlapping.xlsx"
+        )
+
+else:  # Non-overlapping sequential mode
+    if USE_DYNAMIC_LOT:
+        details_path = (
+            f"{input_filename}/Runs_reports_dynamic_lot/"
+            f"{START_DATE}_{input_filename}_dynamic_TR{TARGET}_DD{MAX_DD}_SZ{SIZE}_STEP{CONTRACT_STEP}_"
+            f"TDD{USE_TRAILING_DD}_nooverlap.xlsx"
+        )
+    else:
+        details_path = (
+            f"{input_filename}/Runs_reports_static_lot/"
+            f"{START_DATE}_{input_filename}_static_TR{TARGET}_DD{MAX_DD}_SZ{SIZE}_"
+            f"TDD{USE_TRAILING_DD}_nooverlap.xlsx"
+        )
+
 
 # Extract directory from details_path and create save path
 directory = os.path.dirname(details_path)
@@ -303,14 +380,48 @@ axs[1].set_xlabel("Date")
 plt.tight_layout()
 
 # --- Save combined chart ---
-if USE_DYNAMIC_LOT and OVERLAPPING_RUNS:
-    details_path = f"{input_filename}/Runs_reports_dynamic_lot/{START_DATE}_{input_filename}_dynamic_TR{TARGET}_DD{MAX_DD}_SZ{SIZE}_STEP{CONTRACT_STEP}_TDD{USE_TRAILING_DD}_overlapping.xlsx"
-elif not USE_DYNAMIC_LOT and OVERLAPPING_RUNS:
-    details_path = f"{input_filename}/Runs_reports_static_lot/{START_DATE}_{input_filename}_static_TR{TARGET}_DD{MAX_DD}_SZ{SIZE}_TDD{USE_TRAILING_DD}_overlapping.xlsx"
-elif USE_DYNAMIC_LOT and not OVERLAPPING_RUNS:
-    details_path = f"{input_filename}/Runs_reports_dynamic_lot/{START_DATE}_{input_filename}_dynamic_TR{TARGET}_DD{MAX_DD}_SZ{SIZE}_STEP{CONTRACT_STEP}_TDD{USE_TRAILING_DD}_nooverlap.xlsx"
-else:  # not USE_DYNAMIC_LOT and not OVERLAPPING_RUNS
-    details_path = f"{input_filename}/Runs_reports_static_lot/{START_DATE}_{input_filename}_static_TR{TARGET}_DD{MAX_DD}_SZ{SIZE}_TDD{USE_TRAILING_DD}_nooverlap.xlsx"
+if RUN_MODE == "MONTHLY":
+    if USE_DYNAMIC_LOT:
+        details_path = (
+            f"{input_filename}/Runs_reports_dynamic_lot/"
+            f"{START_DATE}_{input_filename}_dynamic_TR{TARGET}_DD{MAX_DD}_SZ{SIZE}_STEP{CONTRACT_STEP}_"
+            f"TDD{USE_TRAILING_DD}_monthly.xlsx"
+        )
+    else:
+        details_path = (
+            f"{input_filename}/Runs_reports_static_lot/"
+            f"{START_DATE}_{input_filename}_static_TR{TARGET}_DD{MAX_DD}_SZ{SIZE}_"
+            f"TDD{USE_TRAILING_DD}_monthly.xlsx"
+        )
+
+elif RUN_MODE == "OVERLAPPING":
+    if USE_DYNAMIC_LOT:
+        details_path = (
+            f"{input_filename}/Runs_reports_dynamic_lot/"
+            f"{START_DATE}_{input_filename}_dynamic_TR{TARGET}_DD{MAX_DD}_SZ{SIZE}_STEP{CONTRACT_STEP}_"
+            f"TDD{USE_TRAILING_DD}_overlapping.xlsx"
+        )
+    else:
+        details_path = (
+            f"{input_filename}/Runs_reports_static_lot/"
+            f"{START_DATE}_{input_filename}_static_TR{TARGET}_DD{MAX_DD}_SZ{SIZE}_"
+            f"TDD{USE_TRAILING_DD}_overlapping.xlsx"
+        )
+
+else:  # Non-overlapping sequential mode
+    if USE_DYNAMIC_LOT:
+        details_path = (
+            f"{input_filename}/Runs_reports_dynamic_lot/"
+            f"{START_DATE}_{input_filename}_dynamic_TR{TARGET}_DD{MAX_DD}_SZ{SIZE}_STEP{CONTRACT_STEP}_"
+            f"TDD{USE_TRAILING_DD}_nooverlap.xlsx"
+        )
+    else:
+        details_path = (
+            f"{input_filename}/Runs_reports_static_lot/"
+            f"{START_DATE}_{input_filename}_static_TR{TARGET}_DD{MAX_DD}_SZ{SIZE}_"
+            f"TDD{USE_TRAILING_DD}_nooverlap.xlsx"
+        )
+
 
 # Extract directory from details_path and create save path
 directory = os.path.dirname(details_path)
@@ -330,15 +441,48 @@ monthly_stats.plot(x="YearMonth", y="Blown_Runs", kind="bar", title="Blown Runs 
 plt.tight_layout()
 
 # --- Save Year-Monthly Blown Run Statistics chart ---
+if RUN_MODE == "MONTHLY":
+    if USE_DYNAMIC_LOT:
+        details_path = (
+            f"{input_filename}/Runs_reports_dynamic_lot/"
+            f"{START_DATE}_{input_filename}_dynamic_TR{TARGET}_DD{MAX_DD}_SZ{SIZE}_STEP{CONTRACT_STEP}_"
+            f"TDD{USE_TRAILING_DD}_monthly.xlsx"
+        )
+    else:
+        details_path = (
+            f"{input_filename}/Runs_reports_static_lot/"
+            f"{START_DATE}_{input_filename}_static_TR{TARGET}_DD{MAX_DD}_SZ{SIZE}_"
+            f"TDD{USE_TRAILING_DD}_monthly.xlsx"
+        )
 
-if USE_DYNAMIC_LOT and OVERLAPPING_RUNS:
-    details_path = f"{input_filename}/Runs_reports_dynamic_lot/{START_DATE}_{input_filename}_dynamic_TR{TARGET}_DD{MAX_DD}_SZ{SIZE}_STEP{CONTRACT_STEP}_TDD{USE_TRAILING_DD}_overlapping.xlsx"
-elif not USE_DYNAMIC_LOT and OVERLAPPING_RUNS:
-    details_path = f"{input_filename}/Runs_reports_static_lot/{START_DATE}_{input_filename}_static_TR{TARGET}_DD{MAX_DD}_SZ{SIZE}_TDD{USE_TRAILING_DD}_overlapping.xlsx"
-elif USE_DYNAMIC_LOT and not OVERLAPPING_RUNS:
-    details_path = f"{input_filename}/Runs_reports_dynamic_lot/{START_DATE}_{input_filename}_dynamic_TR{TARGET}_DD{MAX_DD}_SZ{SIZE}_STEP{CONTRACT_STEP}_TDD{USE_TRAILING_DD}_nooverlap.xlsx"
-else:  # not USE_DYNAMIC_LOT and not OVERLAPPING_RUNS
-    details_path = f"{input_filename}/Runs_reports_static_lot/{START_DATE}_{input_filename}_static_TR{TARGET}_DD{MAX_DD}_SZ{SIZE}_TDD{USE_TRAILING_DD}_nooverlap.xlsx"
+elif RUN_MODE == "OVERLAPPING":
+    if USE_DYNAMIC_LOT:
+        details_path = (
+            f"{input_filename}/Runs_reports_dynamic_lot/"
+            f"{START_DATE}_{input_filename}_dynamic_TR{TARGET}_DD{MAX_DD}_SZ{SIZE}_STEP{CONTRACT_STEP}_"
+            f"TDD{USE_TRAILING_DD}_overlapping.xlsx"
+        )
+    else:
+        details_path = (
+            f"{input_filename}/Runs_reports_static_lot/"
+            f"{START_DATE}_{input_filename}_static_TR{TARGET}_DD{MAX_DD}_SZ{SIZE}_"
+            f"TDD{USE_TRAILING_DD}_overlapping.xlsx"
+        )
+
+else:
+    if USE_DYNAMIC_LOT:
+        details_path = (
+            f"{input_filename}/Runs_reports_dynamic_lot/"
+            f"{START_DATE}_{input_filename}_dynamic_TR{TARGET}_DD{MAX_DD}_SZ{SIZE}_STEP{CONTRACT_STEP}_"
+            f"TDD{USE_TRAILING_DD}_nooverlap.xlsx"
+        )
+    else:
+        details_path = (
+            f"{input_filename}/Runs_reports_static_lot/"
+            f"{START_DATE}_{input_filename}_static_TR{TARGET}_DD{MAX_DD}_SZ{SIZE}_"
+            f"TDD{USE_TRAILING_DD}_nooverlap.xlsx"
+        )
+
 
 # Extract directory from details_path and create save path
 directory = os.path.dirname(details_path)
@@ -523,14 +667,48 @@ else:
     hist_data = pd.DataFrame(columns=["Days", "Took_days"])
 
 # --- Save all to Excel ---
-if USE_DYNAMIC_LOT and OVERLAPPING_RUNS:
-    details_path = f"{input_filename}/Runs_reports_dynamic_lot/{START_DATE}_{input_filename}_dynamic_pnl_growth_report_TR{TARGET}_DD{MAX_DD}_SZ{SIZE}_STEP{CONTRACT_STEP}_TDD{USE_TRAILING_DD}_overlapping.xlsx"
-elif not USE_DYNAMIC_LOT and OVERLAPPING_RUNS:
-    details_path = f"{input_filename}/Runs_reports_static_lot/{START_DATE}_{input_filename}_static_pnl_growth_report_TR{TARGET}_DD{MAX_DD}_SZ{SIZE}_TDD{USE_TRAILING_DD}_overlapping.xlsx"
-elif USE_DYNAMIC_LOT and not OVERLAPPING_RUNS:
-    details_path = f"{input_filename}/Runs_reports_dynamic_lot/{START_DATE}_{input_filename}_dynamic_pnl_growth_report_TR{TARGET}_DD{MAX_DD}_SZ{SIZE}_STEP{CONTRACT_STEP}_TDD{USE_TRAILING_DD}_nooverlap.xlsx"
-else:  # not USE_DYNAMIC_LOT and not OVERLAPPING_RUNS
-    details_path = f"{input_filename}/Runs_reports_static_lot/{START_DATE}_{input_filename}_static_pnl_growth_report_TR{TARGET}_DD{MAX_DD}_SZ{SIZE}_TDD{USE_TRAILING_DD}_nooverlap.xlsx"
+if RUN_MODE == "MONTHLY":
+    if USE_DYNAMIC_LOT:
+        details_path = (
+            f"{input_filename}/Runs_reports_dynamic_lot/"
+            f"{START_DATE}_{input_filename}_dynamic_pnl_growth_report_TR{TARGET}_DD{MAX_DD}_SZ{SIZE}_STEP{CONTRACT_STEP}_"
+            f"TDD{USE_TRAILING_DD}_monthly.xlsx"
+        )
+    else:
+        details_path = (
+            f"{input_filename}/Runs_reports_static_lot/"
+            f"{START_DATE}_{input_filename}_static_pnl_growth_report_TR{TARGET}_DD{MAX_DD}_SZ{SIZE}_"
+            f"TDD{USE_TRAILING_DD}_monthly.xlsx"
+        )
+
+elif RUN_MODE == "OVERLAPPING":
+    if USE_DYNAMIC_LOT:
+        details_path = (
+            f"{input_filename}/Runs_reports_dynamic_lot/"
+            f"{START_DATE}_{input_filename}_dynamic_pnl_growth_report_TR{TARGET}_DD{MAX_DD}_SZ{SIZE}_STEP{CONTRACT_STEP}_"
+            f"TDD{USE_TRAILING_DD}_overlapping.xlsx"
+        )
+    else:
+        details_path = (
+            f"{input_filename}/Runs_reports_static_lot/"
+            f"{START_DATE}_{input_filename}_static_pnl_growth_report_TR{TARGET}_DD{MAX_DD}_SZ{SIZE}_"
+            f"TDD{USE_TRAILING_DD}_overlapping.xlsx"
+        )
+
+else:
+    if USE_DYNAMIC_LOT:
+        details_path = (
+            f"{input_filename}/Runs_reports_dynamic_lot/"
+            f"{START_DATE}_{input_filename}_dynamic_pnl_growth_report_TR{TARGET}_DD{MAX_DD}_SZ{SIZE}_STEP{CONTRACT_STEP}_"
+            f"TDD{USE_TRAILING_DD}_nooverlap.xlsx"
+        )
+    else:
+        details_path = (
+            f"{input_filename}/Runs_reports_static_lot/"
+            f"{START_DATE}_{input_filename}_static_pnl_growth_report_TR{TARGET}_DD{MAX_DD}_SZ{SIZE}_"
+            f"TDD{USE_TRAILING_DD}_nooverlap.xlsx"
+        )
+
 
 # Extract directory from details_path and create save path
 directory = os.path.dirname(details_path)
@@ -548,6 +726,7 @@ with pd.ExcelWriter(f"{details_path}", engine="xlsxwriter") as writer:
     # Set column width for "Summary Stats" sheet
     worksheet_summary = writer.sheets["Summary Stats"]
     worksheet_monthly_blown = writer.sheets["Monthly Blown Stats"]
+    worksheet_all_runs = writer.sheets["All Runs"]
 
     bold_format = writer.book.add_format({"bold": True})  # Define bold format
     worksheet_summary.set_column(0, 0, 25)  # Adjust column A width (Metric column)
@@ -563,19 +742,56 @@ with pd.ExcelWriter(f"{details_path}", engine="xlsxwriter") as writer:
     worksheet_monthly_blown.set_column(3, 3, 15)  # Adjust column D width
     worksheet_monthly_blown.set_column(4, 4, 15)  # Adjust column E width
 
+    worksheet_all_runs.set_column(0, 0, 20)  # Start_Date
+    worksheet_all_runs.set_column(7, 1, 20)  # End_Date
+
 # --- Save detailed contract log if enabled ---
 
 if SAVE_CONTRACT_LOG:
     details_df = pd.DataFrame(detailed_log)
 
-    if USE_DYNAMIC_LOT and OVERLAPPING_RUNS:
-        details_path = f"{input_filename}/Logs/{START_DATE}_{input_filename}_dynamic_contracts_log_TR{TARGET}_DD{MAX_DD}_SZ{SIZE}_STEP{CONTRACT_STEP}_TDD{USE_TRAILING_DD}_overlapping.csv"
-    elif not USE_DYNAMIC_LOT and OVERLAPPING_RUNS:
-        details_path = f"{input_filename}/Logs/{START_DATE}_{input_filename}_static_contracts_log_TR{TARGET}_DD{MAX_DD}_SZ{SIZE}_TDD{USE_TRAILING_DD}_overlapping.csv"
-    elif USE_DYNAMIC_LOT and not OVERLAPPING_RUNS:
-        details_path = f"{input_filename}/Logs/{START_DATE}_{input_filename}_dynamic_contracts_log_TR{TARGET}_DD{MAX_DD}_SZ{SIZE}_STEP{CONTRACT_STEP}_TDD{USE_TRAILING_DD}_nooverlap.csv"
-    else:   # not USE_DYNAMIC_LOT and not OVERLAPPING_RUNS
-        details_path = f"{input_filename}/Logs/{START_DATE}_{input_filename}_static_contracts_log_TR{TARGET}_DD{MAX_DD}_SZ{SIZE}_TDD{USE_TRAILING_DD}_nooverlap.csv"
+    # --- Save detailed contracts log ---
+    if RUN_MODE == "MONTHLY":
+        if USE_DYNAMIC_LOT:
+            details_path = (
+                f"{input_filename}/Logs/"
+                f"{START_DATE}_{input_filename}_dynamic_contracts_log_TR{TARGET}_DD{MAX_DD}_SZ{SIZE}_STEP{CONTRACT_STEP}_"
+                f"TDD{USE_TRAILING_DD}_monthly.csv"
+            )
+        else:
+            details_path = (
+                f"{input_filename}/Logs/"
+                f"{START_DATE}_{input_filename}_static_contracts_log_TR{TARGET}_DD{MAX_DD}_SZ{SIZE}_"
+                f"TDD{USE_TRAILING_DD}_monthly.csv"
+            )
+
+    elif RUN_MODE == "OVERLAPPING":
+        if USE_DYNAMIC_LOT:
+            details_path = (
+                f"{input_filename}/Logs/"
+                f"{START_DATE}_{input_filename}_dynamic_contracts_log_TR{TARGET}_DD{MAX_DD}_SZ{SIZE}_STEP{CONTRACT_STEP}_"
+                f"TDD{USE_TRAILING_DD}_overlapping.csv"
+            )
+        else:
+            details_path = (
+                f"{input_filename}/Logs/"
+                f"{START_DATE}_{input_filename}_static_contracts_log_TR{TARGET}_DD{MAX_DD}_SZ{SIZE}_"
+                f"TDD{USE_TRAILING_DD}_overlapping.csv"
+            )
+
+    else:  # Sequential (non-overlapping) runs
+        if USE_DYNAMIC_LOT:
+            details_path = (
+                f"{input_filename}/Logs/"
+                f"{START_DATE}_{input_filename}_dynamic_contracts_log_TR{TARGET}_DD{MAX_DD}_SZ{SIZE}_STEP{CONTRACT_STEP}_"
+                f"TDD{USE_TRAILING_DD}_nooverlap.csv"
+            )
+        else:
+            details_path = (
+                f"{input_filename}/Logs/"
+                f"{START_DATE}_{input_filename}_static_contracts_log_TR{TARGET}_DD{MAX_DD}_SZ{SIZE}_"
+                f"TDD{USE_TRAILING_DD}_nooverlap.csv"
+            )
 
     os.makedirs(os.path.dirname(details_path), exist_ok=True)
     details_df.to_csv(details_path, index=False, sep="\t")
