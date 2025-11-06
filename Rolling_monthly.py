@@ -5,9 +5,9 @@ import os
 # === CONFIGURATION =======================================
 # =========================================================
 
-# INPUT_FILE = "csvs/all_times_14_flat.csv"
-INPUT_FILE = "csvs/premarket_only.csv"
-# INPUT_FILE = "csvs/top_times_only.csv"
+# INPUT_FILE = "CSVS/all_times_14_flat.csv"
+INPUT_FILE = "CSVS/premarket_only.csv"
+# INPUT_FILE = "CSVS/top_times_only.csv"
 
 SEP = "\t"
 input_filename = (os.path.basename(INPUT_FILE)).replace(".csv", "")

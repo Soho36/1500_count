@@ -25,9 +25,9 @@ START_DATE = None
 END_DATE = None
 
 # --- Input CSV file ---
-# input_file = "csvs/all_times_14_flat.csv"
-input_file = "csvs/premarket_only.csv"
-# input_file = "csvs/top_times_only.csv"
+# input_file = "CSVS/all_times_14_flat.csv"
+input_file = "CSVS/premarket_only.csv"
+# input_file = "CSVS/top_times_only.csv"
 
 
 def simulate_blowup_rate(df, size, target, max_dd, use_trailing=True, max_runs=None):
