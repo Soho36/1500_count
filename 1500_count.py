@@ -7,14 +7,15 @@ import numpy as np
 MAX_DD = 1500               # maximum drawdown allowed before "blowup"
 TARGET = 1500               # profit target per run
 SIZE = 2                    # static lot size (if not using dynamic)
+COST_PER_MONTH = 40         # cost per month per run
 
 # --- Run scheduling mode ---
 
-# RUN_MODE = "OVERLAPPING"  # New runs start every day (overlapping)
-RUN_MODE = "SEQUENTIAL"     # New run starts only after previous run ends
-# RUN_MODE = "MONTHLY"      # New runs start at beginning of each month
+# RUN_MODE = "OVERLAPPING"      # New runs start every day (overlapping)
+# RUN_MODE = "SEQUENTIAL"       # New run starts only after previous run ends
+RUN_MODE = "MONTHLY"            # New runs start at beginning of each month
 
-RUNS_PER_MONTH = 2  # how many new runs to start per month (if MONTHLY)
+RUNS_PER_MONTH = 1  # how many new runs to start every month (if RUN_MODE = "MONTHLY")
 
 # --- Drawdown options ---
 USE_TRAILING_DD = True      # 🔁 switch: True = trailing DD, False = static DD
@@ -29,10 +30,10 @@ MAX_RUNS_TO_LOG = 1500       # limit detailed log to first N runs
 
 # --- Optional date filter ---
 
-# START_DATE = "2020-01-01"          # set to None to disable filtering "YYYY-MM-DD"
-# END_DATE = "2020-02-29"             # set to None to disable filtering "YYYY-MM-DD"
+# START_DATE = "2025-09-12"          # set to None to disable filtering "YYYY-MM-DD"
 START_DATE = None
 END_DATE = None
+# END_DATE = "2023-07-29"             # set to None to disable filtering "YYYY-MM-DD"
 
 input_file = "CSVS/all_times_14_flat.csv"
 # input_file = "CSVS/premarket_only.csv"
@@ -268,6 +269,7 @@ while start_idx_pointer < len(start_indices):
 
 results_df = pd.DataFrame(results)
 results_df["Start_Date"] = pd.to_datetime(results_df["Start_Date"])
+
 # --- Add a 'Completed' column ---
 # A run is 'completed' if it either reached the target or was blown
 results_df["Completed"] = results_df["Rows_to_+Target"].notna() | results_df["Rows_to_blown"].notna()
@@ -304,6 +306,29 @@ monthly_stats["Successful_Runs"] = monthly_stats["Completed_Runs"] - monthly_sta
 # --- Compute DD% for each run ---
 results_df["DD_%"] = (results_df["Max_Drawdown"] / MAX_DD) * 100
 results_df["Days_per_run"] = results_df.apply(lambda row: row["Rows_to_+Target"] if pd.notna(row["Rows_to_+Target"]) else row["Rows_to_blown"], axis=1)
+
+# Make sure Days_per_run is numeric (in days)
+results_df["Days_per_run"] = pd.to_numeric(results_df["Days_per_run"], errors="coerce")
+
+# Compute how many 30-day periods the run lasted (ceil division)
+results_df["Months_per_run"] = np.ceil(results_df["Days_per_run"] / 30).astype("Int64")
+
+# Calculate total cost
+results_df["Run_Cost"] = results_df["Months_per_run"] * COST_PER_MONTH
+
+# Extract year from Start_Date
+results_df["Year"] = results_df["Start_Date"].dt.year
+
+# Aggregate total cost per year
+yearly_costs = (
+    results_df.groupby("Year")["Run_Cost"]
+    .sum()
+    .reset_index(name="Total_Cost_per_Year")
+)
+
+# Merge yearly totals back to main dataframe
+results_df = results_df.merge(yearly_costs, on="Year", how="left")
+
 
 # --- Plotting_1 ---
 # Histogram: Distribution of Max DD Used
