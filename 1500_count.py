@@ -6,14 +6,18 @@ import numpy as np
 # === CONFIG ===
 MAX_DD = 1500               # maximum drawdown allowed before "blowup"
 TARGET = 1500               # profit target per run
-SIZE = 3                    # static lot size (if not using dynamic)
+SIZE = 1                    # static lot size (if not using dynamic)
 COST_PER_MONTH = 40         # cost per month per run
+
+input_file = "CSVS/all_times_14_flat.csv"
+# input_file = "CSVS/premarket_only.csv"
+# input_file = "CSVS/top_times_only.csv"
 
 # --- Run scheduling mode ---
 
-# RUN_MODE = "OVERLAPPING"      # New runs start every day (overlapping)
+RUN_MODE = "OVERLAPPING"      # New runs start every day (overlapping)
 # RUN_MODE = "SEQUENTIAL"       # New run starts only after previous run ends
-RUN_MODE = "MONTHLY"            # New runs start at beginning of each month
+# RUN_MODE = "MONTHLY"            # New runs start at beginning of each month
 
 RUNS_PER_MONTH = 2  # how many new runs to start every month (if RUN_MODE = "MONTHLY")
 
@@ -34,10 +38,6 @@ MAX_RUNS_TO_LOG = 1500       # limit detailed log to first N runs
 START_DATE = None
 END_DATE = None
 # END_DATE = "2023-07-29"             # set to None to disable filtering "YYYY-MM-DD"
-
-input_file = "CSVS/all_times_14_flat.csv"
-# input_file = "CSVS/premarket_only.csv"
-# input_file = "CSVS/top_times_only.csv"
 
 SHOW_PLOTS = False  # set to True to display plots interactively
 
@@ -377,27 +377,27 @@ if RUN_MODE == "MONTHLY":
     if USE_DYNAMIC_LOT:
         details_path = (
             f"{input_filename}/Runs_reports_dynamic_lot/"
-            f"{START_DATE}_{input_filename}_dynamic_TR{TARGET}_DD{MAX_DD}_SZ{SIZE}_STEP{CONTRACT_STEP}_"
-            f"TDD{USE_TRAILING_DD}_monthly.xlsx"
+            f"{START_DATE}_{END_DATE}_{input_filename}_dynamic_TR{TARGET}_DD{MAX_DD}_SZ{SIZE}_STEP{CONTRACT_STEP}_"
+            f"TDD{USE_TRAILING_DD}_monthly_RP{RUNS_PER_MONTH}.xlsx"
         )
     else:
         details_path = (
             f"{input_filename}/Runs_reports_static_lot/"
-            f"{START_DATE}_{input_filename}_static_TR{TARGET}_DD{MAX_DD}_SZ{SIZE}_"
-            f"TDD{USE_TRAILING_DD}_monthly.xlsx"
+            f"{START_DATE}_{END_DATE}_{input_filename}_static_TR{TARGET}_DD{MAX_DD}_SZ{SIZE}_"
+            f"TDD{USE_TRAILING_DD}_monthly_RP{RUNS_PER_MONTH}.xlsx"
         )
 
 elif RUN_MODE == "OVERLAPPING":
     if USE_DYNAMIC_LOT:
         details_path = (
             f"{input_filename}/Runs_reports_dynamic_lot/"
-            f"{START_DATE}_{input_filename}_dynamic_TR{TARGET}_DD{MAX_DD}_SZ{SIZE}_STEP{CONTRACT_STEP}_"
+            f"{START_DATE}_{END_DATE}_{input_filename}_dynamic_TR{TARGET}_DD{MAX_DD}_SZ{SIZE}_STEP{CONTRACT_STEP}_"
             f"TDD{USE_TRAILING_DD}_overlapping.xlsx"
         )
     else:
         details_path = (
             f"{input_filename}/Runs_reports_static_lot/"
-            f"{START_DATE}_{input_filename}_static_TR{TARGET}_DD{MAX_DD}_SZ{SIZE}_"
+            f"{START_DATE}_{END_DATE}_{input_filename}_static_TR{TARGET}_DD{MAX_DD}_SZ{SIZE}_"
             f"TDD{USE_TRAILING_DD}_overlapping.xlsx"
         )
 
@@ -405,13 +405,13 @@ else:  # Non-overlapping sequential mode
     if USE_DYNAMIC_LOT:
         details_path = (
             f"{input_filename}/Runs_reports_dynamic_lot/"
-            f"{START_DATE}_{input_filename}_dynamic_TR{TARGET}_DD{MAX_DD}_SZ{SIZE}_STEP{CONTRACT_STEP}_"
+            f"{START_DATE}_{END_DATE}_{input_filename}_dynamic_TR{TARGET}_DD{MAX_DD}_SZ{SIZE}_STEP{CONTRACT_STEP}_"
             f"TDD{USE_TRAILING_DD}_sequential.xlsx"
         )
     else:
         details_path = (
             f"{input_filename}/Runs_reports_static_lot/"
-            f"{START_DATE}_{input_filename}_static_TR{TARGET}_DD{MAX_DD}_SZ{SIZE}_"
+            f"{START_DATE}_{END_DATE}_{input_filename}_static_TR{TARGET}_DD{MAX_DD}_SZ{SIZE}_"
             f"TDD{USE_TRAILING_DD}_sequential.xlsx"
         )
 
@@ -458,27 +458,27 @@ if RUN_MODE == "MONTHLY":
     if USE_DYNAMIC_LOT:
         details_path = (
             f"{input_filename}/Runs_reports_dynamic_lot/"
-            f"{START_DATE}_{input_filename}_dynamic_TR{TARGET}_DD{MAX_DD}_SZ{SIZE}_STEP{CONTRACT_STEP}_"
-            f"TDD{USE_TRAILING_DD}_monthly.xlsx"
+            f"{START_DATE}_{END_DATE}_{input_filename}_dynamic_TR{TARGET}_DD{MAX_DD}_SZ{SIZE}_STEP{CONTRACT_STEP}_"
+            f"TDD{USE_TRAILING_DD}_monthly_RP{RUNS_PER_MONTH}.xlsx"
         )
     else:
         details_path = (
             f"{input_filename}/Runs_reports_static_lot/"
-            f"{START_DATE}_{input_filename}_static_TR{TARGET}_DD{MAX_DD}_SZ{SIZE}_"
-            f"TDD{USE_TRAILING_DD}_monthly.xlsx"
+            f"{START_DATE}_{END_DATE}_{input_filename}_static_TR{TARGET}_DD{MAX_DD}_SZ{SIZE}_"
+            f"TDD{USE_TRAILING_DD}_monthly_RP{RUNS_PER_MONTH}.xlsx"
         )
 
 elif RUN_MODE == "OVERLAPPING":
     if USE_DYNAMIC_LOT:
         details_path = (
             f"{input_filename}/Runs_reports_dynamic_lot/"
-            f"{START_DATE}_{input_filename}_dynamic_TR{TARGET}_DD{MAX_DD}_SZ{SIZE}_STEP{CONTRACT_STEP}_"
+            f"{START_DATE}_{END_DATE}_{input_filename}_dynamic_TR{TARGET}_DD{MAX_DD}_SZ{SIZE}_STEP{CONTRACT_STEP}_"
             f"TDD{USE_TRAILING_DD}_overlapping.xlsx"
         )
     else:
         details_path = (
             f"{input_filename}/Runs_reports_static_lot/"
-            f"{START_DATE}_{input_filename}_static_TR{TARGET}_DD{MAX_DD}_SZ{SIZE}_"
+            f"{START_DATE}_{END_DATE}_{input_filename}_static_TR{TARGET}_DD{MAX_DD}_SZ{SIZE}_"
             f"TDD{USE_TRAILING_DD}_overlapping.xlsx"
         )
 
@@ -486,13 +486,13 @@ else:  # Non-overlapping sequential mode
     if USE_DYNAMIC_LOT:
         details_path = (
             f"{input_filename}/Runs_reports_dynamic_lot/"
-            f"{START_DATE}_{input_filename}_dynamic_TR{TARGET}_DD{MAX_DD}_SZ{SIZE}_STEP{CONTRACT_STEP}_"
+            f"{START_DATE}_{END_DATE}_{input_filename}_dynamic_TR{TARGET}_DD{MAX_DD}_SZ{SIZE}_STEP{CONTRACT_STEP}_"
             f"TDD{USE_TRAILING_DD}_sequential.xlsx"
         )
     else:
         details_path = (
             f"{input_filename}/Runs_reports_static_lot/"
-            f"{START_DATE}_{input_filename}_static_TR{TARGET}_DD{MAX_DD}_SZ{SIZE}_"
+            f"{START_DATE}_{END_DATE}_{input_filename}_static_TR{TARGET}_DD{MAX_DD}_SZ{SIZE}_"
             f"TDD{USE_TRAILING_DD}_sequential.xlsx"
         )
 
@@ -519,27 +519,27 @@ if RUN_MODE == "MONTHLY":
     if USE_DYNAMIC_LOT:
         details_path = (
             f"{input_filename}/Runs_reports_dynamic_lot/"
-            f"{START_DATE}_{input_filename}_dynamic_TR{TARGET}_DD{MAX_DD}_SZ{SIZE}_STEP{CONTRACT_STEP}_"
-            f"TDD{USE_TRAILING_DD}_monthly.xlsx"
+            f"{START_DATE}_{END_DATE}_{input_filename}_dynamic_TR{TARGET}_DD{MAX_DD}_SZ{SIZE}_STEP{CONTRACT_STEP}_"
+            f"TDD{USE_TRAILING_DD}_monthly_RP{RUNS_PER_MONTH}.xlsx"
         )
     else:
         details_path = (
             f"{input_filename}/Runs_reports_static_lot/"
-            f"{START_DATE}_{input_filename}_static_TR{TARGET}_DD{MAX_DD}_SZ{SIZE}_"
-            f"TDD{USE_TRAILING_DD}_monthly.xlsx"
+            f"{START_DATE}_{END_DATE}_{input_filename}_static_TR{TARGET}_DD{MAX_DD}_SZ{SIZE}_"
+            f"TDD{USE_TRAILING_DD}_monthly_RP{RUNS_PER_MONTH}.xlsx"
         )
 
 elif RUN_MODE == "OVERLAPPING":
     if USE_DYNAMIC_LOT:
         details_path = (
             f"{input_filename}/Runs_reports_dynamic_lot/"
-            f"{START_DATE}_{input_filename}_dynamic_TR{TARGET}_DD{MAX_DD}_SZ{SIZE}_STEP{CONTRACT_STEP}_"
+            f"{START_DATE}_{END_DATE}_{input_filename}_dynamic_TR{TARGET}_DD{MAX_DD}_SZ{SIZE}_STEP{CONTRACT_STEP}_"
             f"TDD{USE_TRAILING_DD}_overlapping.xlsx"
         )
     else:
         details_path = (
             f"{input_filename}/Runs_reports_static_lot/"
-            f"{START_DATE}_{input_filename}_static_TR{TARGET}_DD{MAX_DD}_SZ{SIZE}_"
+            f"{START_DATE}_{END_DATE}_{input_filename}_static_TR{TARGET}_DD{MAX_DD}_SZ{SIZE}_"
             f"TDD{USE_TRAILING_DD}_overlapping.xlsx"
         )
 
@@ -547,13 +547,13 @@ else:
     if USE_DYNAMIC_LOT:
         details_path = (
             f"{input_filename}/Runs_reports_dynamic_lot/"
-            f"{START_DATE}_{input_filename}_dynamic_TR{TARGET}_DD{MAX_DD}_SZ{SIZE}_STEP{CONTRACT_STEP}_"
+            f"{START_DATE}_{END_DATE}_{input_filename}_dynamic_TR{TARGET}_DD{MAX_DD}_SZ{SIZE}_STEP{CONTRACT_STEP}_"
             f"TDD{USE_TRAILING_DD}_sequential.xlsx"
         )
     else:
         details_path = (
             f"{input_filename}/Runs_reports_static_lot/"
-            f"{START_DATE}_{input_filename}_static_TR{TARGET}_DD{MAX_DD}_SZ{SIZE}_"
+            f"{START_DATE}_{END_DATE}_{input_filename}_static_TR{TARGET}_DD{MAX_DD}_SZ{SIZE}_"
             f"TDD{USE_TRAILING_DD}_sequential.xlsx"
         )
 
@@ -745,27 +745,27 @@ if RUN_MODE == "MONTHLY":
     if USE_DYNAMIC_LOT:
         details_path = (
             f"{input_filename}/Runs_reports_dynamic_lot/"
-            f"{START_DATE}_{input_filename}_dynamic_pnl_growth_report_TR{TARGET}_DD{MAX_DD}_SZ{SIZE}_STEP{CONTRACT_STEP}_"
-            f"TDD{USE_TRAILING_DD}_monthly.xlsx"
+            f"{START_DATE}_{END_DATE}_{input_filename}_dynamic_TR{TARGET}_DD{MAX_DD}_SZ{SIZE}_STEP{CONTRACT_STEP}_"
+            f"TDD{USE_TRAILING_DD}_monthly_RP{RUNS_PER_MONTH}.xlsx"
         )
     else:
         details_path = (
             f"{input_filename}/Runs_reports_static_lot/"
-            f"{START_DATE}_{input_filename}_static_pnl_growth_report_TR{TARGET}_DD{MAX_DD}_SZ{SIZE}_"
-            f"TDD{USE_TRAILING_DD}_monthly.xlsx"
+            f"{START_DATE}_{END_DATE}_{input_filename}_static_TR{TARGET}_DD{MAX_DD}_SZ{SIZE}_"
+            f"TDD{USE_TRAILING_DD}_monthly_RP{RUNS_PER_MONTH}.xlsx"
         )
 
 elif RUN_MODE == "OVERLAPPING":
     if USE_DYNAMIC_LOT:
         details_path = (
             f"{input_filename}/Runs_reports_dynamic_lot/"
-            f"{START_DATE}_{input_filename}_dynamic_pnl_growth_report_TR{TARGET}_DD{MAX_DD}_SZ{SIZE}_STEP{CONTRACT_STEP}_"
+            f"{START_DATE}_{END_DATE}_{input_filename}_dynamic_TR{TARGET}_DD{MAX_DD}_SZ{SIZE}_STEP{CONTRACT_STEP}_"
             f"TDD{USE_TRAILING_DD}_overlapping.xlsx"
         )
     else:
         details_path = (
             f"{input_filename}/Runs_reports_static_lot/"
-            f"{START_DATE}_{input_filename}_static_pnl_growth_report_TR{TARGET}_DD{MAX_DD}_SZ{SIZE}_"
+            f"{START_DATE}_{END_DATE}_{input_filename}_static_TR{TARGET}_DD{MAX_DD}_SZ{SIZE}_"
             f"TDD{USE_TRAILING_DD}_overlapping.xlsx"
         )
 
@@ -773,13 +773,13 @@ else:
     if USE_DYNAMIC_LOT:
         details_path = (
             f"{input_filename}/Runs_reports_dynamic_lot/"
-            f"{START_DATE}_{input_filename}_dynamic_pnl_growth_report_TR{TARGET}_DD{MAX_DD}_SZ{SIZE}_STEP{CONTRACT_STEP}_"
+            f"{START_DATE}_{END_DATE}_{input_filename}_dynamic_TR{TARGET}_DD{MAX_DD}_SZ{SIZE}_STEP{CONTRACT_STEP}_"
             f"TDD{USE_TRAILING_DD}_sequential.xlsx"
         )
     else:
         details_path = (
             f"{input_filename}/Runs_reports_static_lot/"
-            f"{START_DATE}_{input_filename}_static_pnl_growth_report_TR{TARGET}_DD{MAX_DD}_SZ{SIZE}_"
+            f"{START_DATE}_{END_DATE}_{input_filename}_static_TR{TARGET}_DD{MAX_DD}_SZ{SIZE}_"
             f"TDD{USE_TRAILING_DD}_sequential.xlsx"
         )
 
@@ -832,27 +832,27 @@ if SAVE_CONTRACT_LOG:
         if USE_DYNAMIC_LOT:
             details_path = (
                 f"{input_filename}/Logs/"
-                f"{START_DATE}_{input_filename}_dynamic_contracts_log_TR{TARGET}_DD{MAX_DD}_SZ{SIZE}_STEP{CONTRACT_STEP}_"
-                f"TDD{USE_TRAILING_DD}_monthly.csv"
+                f"{START_DATE}_{END_DATE}_{input_filename}_dynamic_contracts_log_TR{TARGET}_DD{MAX_DD}_SZ{SIZE}_STEP{CONTRACT_STEP}_"
+                f"TDD{USE_TRAILING_DD}_monthly_RP{RUNS_PER_MONTH}.csv"
             )
         else:
             details_path = (
                 f"{input_filename}/Logs/"
-                f"{START_DATE}_{input_filename}_static_contracts_log_TR{TARGET}_DD{MAX_DD}_SZ{SIZE}_"
-                f"TDD{USE_TRAILING_DD}_monthly.csv"
+                f"{START_DATE}_{END_DATE}_{input_filename}_static_contracts_log_TR{TARGET}_DD{MAX_DD}_SZ{SIZE}_"
+                f"TDD{USE_TRAILING_DD}_monthly_RP{RUNS_PER_MONTH}.csv"
             )
 
     elif RUN_MODE == "OVERLAPPING":
         if USE_DYNAMIC_LOT:
             details_path = (
                 f"{input_filename}/Logs/"
-                f"{START_DATE}_{input_filename}_dynamic_contracts_log_TR{TARGET}_DD{MAX_DD}_SZ{SIZE}_STEP{CONTRACT_STEP}_"
+                f"{START_DATE}_{END_DATE}_{input_filename}_dynamic_contracts_log_TR{TARGET}_DD{MAX_DD}_SZ{SIZE}_STEP{CONTRACT_STEP}_"
                 f"TDD{USE_TRAILING_DD}_overlapping.csv"
             )
         else:
             details_path = (
                 f"{input_filename}/Logs/"
-                f"{START_DATE}_{input_filename}_static_contracts_log_TR{TARGET}_DD{MAX_DD}_SZ{SIZE}_"
+                f"{START_DATE}_{END_DATE}_{input_filename}_static_contracts_log_TR{TARGET}_DD{MAX_DD}_SZ{SIZE}_"
                 f"TDD{USE_TRAILING_DD}_overlapping.csv"
             )
 
@@ -860,13 +860,13 @@ if SAVE_CONTRACT_LOG:
         if USE_DYNAMIC_LOT:
             details_path = (
                 f"{input_filename}/Logs/"
-                f"{START_DATE}_{input_filename}_dynamic_contracts_log_TR{TARGET}_DD{MAX_DD}_SZ{SIZE}_STEP{CONTRACT_STEP}_"
+                f"{START_DATE}_{END_DATE}_{input_filename}_dynamic_contracts_log_TR{TARGET}_DD{MAX_DD}_SZ{SIZE}_STEP{CONTRACT_STEP}_"
                 f"TDD{USE_TRAILING_DD}_sequential.csv"
             )
         else:
             details_path = (
                 f"{input_filename}/Logs/"
-                f"{START_DATE}_{input_filename}_static_contracts_log_TR{TARGET}_DD{MAX_DD}_SZ{SIZE}_"
+                f"{START_DATE}_{END_DATE}_{input_filename}_static_contracts_log_TR{TARGET}_DD{MAX_DD}_SZ{SIZE}_"
                 f"TDD{USE_TRAILING_DD}_sequential.csv"
             )
 
