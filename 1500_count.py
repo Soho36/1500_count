@@ -6,7 +6,7 @@ import numpy as np
 # === CONFIG ===
 MAX_DD = 1500               # maximum drawdown allowed before "blowup"
 TARGET = 1500               # profit target per run
-SIZE = 2                    # static lot size (if not using dynamic)
+SIZE = 1                    # static lot size (if not using dynamic)
 COST_PER_MONTH = 40         # cost per month per run
 
 # --- Run scheduling mode ---
@@ -15,7 +15,7 @@ COST_PER_MONTH = 40         # cost per month per run
 # RUN_MODE = "SEQUENTIAL"       # New run starts only after previous run ends
 RUN_MODE = "MONTHLY"            # New runs start at beginning of each month
 
-RUNS_PER_MONTH = 1  # how many new runs to start every month (if RUN_MODE = "MONTHLY")
+RUNS_PER_MONTH = 2  # how many new runs to start every month (if RUN_MODE = "MONTHLY")
 
 # --- Drawdown options ---
 USE_TRAILING_DD = True      # 🔁 switch: True = trailing DD, False = static DD
@@ -39,7 +39,7 @@ input_file = "CSVS/all_times_14_flat.csv"
 # input_file = "CSVS/premarket_only.csv"
 # input_file = "CSVS/top_times_only.csv"
 
-SHOW_PLOTS = True  # set to True to display plots interactively
+SHOW_PLOTS = False  # set to True to display plots interactively
 
 dataframe = pd.read_csv(input_file, sep="\t")
 input_filename = (os.path.basename(input_file)).replace(".csv", "")
@@ -329,6 +329,35 @@ yearly_costs = (
 # Merge yearly totals back to main dataframe
 results_df = results_df.merge(yearly_costs, on="Year", how="left")
 
+# Yearly cost summary
+yearly_summary = (
+    results_df.groupby("Year")
+    .agg(
+        Total_Cost=("Run_Cost", "sum"),
+        Total_Runs=("Run_Cost", "count"),
+        Avg_Run_Length=("Days_per_run", "mean"),
+        Blown_Runs=("Blown", "sum"),
+        Successful_Runs=("Blown", lambda x: (x == False).sum()),
+    )
+    .reset_index()
+)
+
+# Add blown percentage
+yearly_summary["Blown_%"] = (yearly_summary["Blown_Runs"] / yearly_summary["Total_Runs"] * 100).round(2)
+
+
+total_row = pd.DataFrame({
+    "Year": ["Total"],
+    "Total_Cost": [yearly_summary["Total_Cost"].sum()],
+    "Total_Runs": [yearly_summary["Total_Runs"].sum()],
+    "Avg_Run_Length": [results_df["Days_per_run"].mean()],
+    "Blown_Runs": [yearly_summary["Blown_Runs"].sum()],
+    "Successful_Runs": [yearly_summary["Successful_Runs"].sum()],
+    "Blown_%": [(yearly_summary["Blown_Runs"].sum() / yearly_summary["Total_Runs"].sum() * 100).round(2)]
+})
+
+# Combine yearly summary + total row
+yearly_summary = pd.concat([yearly_summary, total_row], ignore_index=True)
 
 # --- Plotting_1 ---
 # Histogram: Distribution of Max DD Used
@@ -762,8 +791,11 @@ directory = os.path.dirname(details_path)
 os.makedirs(directory, exist_ok=True)
 
 with pd.ExcelWriter(f"{details_path}", engine="xlsxwriter") as writer:
+
     results_df = results_df.sort_values("Start_Date").reset_index(drop=True)
     results_df.to_excel(writer, sheet_name="All Runs", index=False)
+    start_row = len(results_df) + 3  # leave a few blank lines
+    yearly_summary.to_excel(writer, index=False, sheet_name="All Runs", startrow=start_row)
     summary_df.to_excel(writer, sheet_name="Summary Stats", index=False)
     hist_data.to_excel(writer, sheet_name="Histogram", index=False)
     monthly_stats.to_excel(writer, sheet_name="Monthly Blown Stats", index=False)
