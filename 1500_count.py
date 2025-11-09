@@ -15,11 +15,12 @@ input_file = "CSVS/all_times_14_flat.csv"
 
 # --- Run scheduling mode ---
 
-RUN_MODE = "OVERLAPPING"      # New runs start every day (overlapping)
+# RUN_MODE = "OVERLAPPING"      # New runs start every day (overlapping)
 # RUN_MODE = "SEQUENTIAL"       # New run starts only after previous run ends
-# RUN_MODE = "MONTHLY"            # New runs start at beginning of each month
+RUN_MODE = "MONTHLY"            # New runs start at beginning of each month
 
 RUNS_PER_MONTH = 2  # how many new runs to start every month (if RUN_MODE = "MONTHLY")
+SPACING_DAYS = 15  # how many days apart to start runs within the same month
 
 # --- Drawdown options ---
 USE_TRAILING_DD = True      # 🔁 switch: True = trailing DD, False = static DD
@@ -99,16 +100,33 @@ def detailed_log_helper(det_log, df, st_idx, ix, cts, pnl_today, cumul_pnl, pk_p
 
 
 # --- Prepare list of start indices depending on mode ---
+# --- Select monthly starting indices ---
 if RUN_MODE == "MONTHLY":
     dataframe["YearMonth"] = pd.to_datetime(dataframe["Date"]).dt.to_period("M")
-    start_indices = (
-        dataframe.groupby("YearMonth")
-        .head(RUNS_PER_MONTH)
-        .index
-        .tolist()
-    )
+
+    start_indices = []
+    for _, group in dataframe.groupby("YearMonth"):
+        # ensure group is sorted by date
+        group = group.sort_values("Date")
+
+        # always start first run at beginning of month
+        selected_indices = [group.index[0]]
+
+        # add more runs spaced by roughly SPACING_DAYS
+        for k in range(1, RUNS_PER_MONTH):
+            target_date = group.iloc[0]["Date"] + pd.Timedelta(days=k * SPACING_DAYS)
+            # find the first available date >= target_date
+            next_idx = group.index[group["Date"] >= target_date]
+            if len(next_idx) > 0:
+                selected_indices.append(next_idx[0])
+            else:
+                break  # no more data in this month
+
+        start_indices.extend(selected_indices)
+
 else:
     start_indices = list(range(len(dataframe)))
+
 
 # --- Loop through every possible starting date ---
 start_idx_pointer = 0
@@ -378,13 +396,13 @@ if RUN_MODE == "MONTHLY":
         details_path = (
             f"{input_filename}/Runs_reports_dynamic_lot/"
             f"{START_DATE}_{END_DATE}_{input_filename}_dynamic_TR{TARGET}_DD{MAX_DD}_SZ{SIZE}_STEP{CONTRACT_STEP}_"
-            f"TDD{USE_TRAILING_DD}_monthly_RP{RUNS_PER_MONTH}.xlsx"
+            f"TDD{USE_TRAILING_DD}_monthly_RP{RUNS_PER_MONTH}_SPD_{SPACING_DAYS}.xlsx"
         )
     else:
         details_path = (
             f"{input_filename}/Runs_reports_static_lot/"
             f"{START_DATE}_{END_DATE}_{input_filename}_static_TR{TARGET}_DD{MAX_DD}_SZ{SIZE}_"
-            f"TDD{USE_TRAILING_DD}_monthly_RP{RUNS_PER_MONTH}.xlsx"
+            f"TDD{USE_TRAILING_DD}_monthly_RP{RUNS_PER_MONTH}_SPD_{SPACING_DAYS}.xlsx"
         )
 
 elif RUN_MODE == "OVERLAPPING":
@@ -459,13 +477,13 @@ if RUN_MODE == "MONTHLY":
         details_path = (
             f"{input_filename}/Runs_reports_dynamic_lot/"
             f"{START_DATE}_{END_DATE}_{input_filename}_dynamic_TR{TARGET}_DD{MAX_DD}_SZ{SIZE}_STEP{CONTRACT_STEP}_"
-            f"TDD{USE_TRAILING_DD}_monthly_RP{RUNS_PER_MONTH}.xlsx"
+            f"TDD{USE_TRAILING_DD}_monthly_RP{RUNS_PER_MONTH}_SPD_{SPACING_DAYS}.xlsx"
         )
     else:
         details_path = (
             f"{input_filename}/Runs_reports_static_lot/"
             f"{START_DATE}_{END_DATE}_{input_filename}_static_TR{TARGET}_DD{MAX_DD}_SZ{SIZE}_"
-            f"TDD{USE_TRAILING_DD}_monthly_RP{RUNS_PER_MONTH}.xlsx"
+            f"TDD{USE_TRAILING_DD}_monthly_RP{RUNS_PER_MONTH}_SPD_{SPACING_DAYS}.xlsx"
         )
 
 elif RUN_MODE == "OVERLAPPING":
@@ -520,13 +538,13 @@ if RUN_MODE == "MONTHLY":
         details_path = (
             f"{input_filename}/Runs_reports_dynamic_lot/"
             f"{START_DATE}_{END_DATE}_{input_filename}_dynamic_TR{TARGET}_DD{MAX_DD}_SZ{SIZE}_STEP{CONTRACT_STEP}_"
-            f"TDD{USE_TRAILING_DD}_monthly_RP{RUNS_PER_MONTH}.xlsx"
+            f"TDD{USE_TRAILING_DD}_monthly_RP{RUNS_PER_MONTH}_SPD_{SPACING_DAYS}.xlsx"
         )
     else:
         details_path = (
             f"{input_filename}/Runs_reports_static_lot/"
             f"{START_DATE}_{END_DATE}_{input_filename}_static_TR{TARGET}_DD{MAX_DD}_SZ{SIZE}_"
-            f"TDD{USE_TRAILING_DD}_monthly_RP{RUNS_PER_MONTH}.xlsx"
+            f"TDD{USE_TRAILING_DD}_monthly_RP{RUNS_PER_MONTH}_SPD_{SPACING_DAYS}.xlsx"
         )
 
 elif RUN_MODE == "OVERLAPPING":
@@ -746,13 +764,13 @@ if RUN_MODE == "MONTHLY":
         details_path = (
             f"{input_filename}/Runs_reports_dynamic_lot/"
             f"{START_DATE}_{END_DATE}_{input_filename}_dynamic_TR{TARGET}_DD{MAX_DD}_SZ{SIZE}_STEP{CONTRACT_STEP}_"
-            f"TDD{USE_TRAILING_DD}_monthly_RP{RUNS_PER_MONTH}.xlsx"
+            f"TDD{USE_TRAILING_DD}_monthly_RP{RUNS_PER_MONTH}_SPD_{SPACING_DAYS}.xlsx"
         )
     else:
         details_path = (
             f"{input_filename}/Runs_reports_static_lot/"
             f"{START_DATE}_{END_DATE}_{input_filename}_static_TR{TARGET}_DD{MAX_DD}_SZ{SIZE}_"
-            f"TDD{USE_TRAILING_DD}_monthly_RP{RUNS_PER_MONTH}.xlsx"
+            f"TDD{USE_TRAILING_DD}_monthly_RP{RUNS_PER_MONTH}_SPD_{SPACING_DAYS}.xlsx"
         )
 
 elif RUN_MODE == "OVERLAPPING":
@@ -833,13 +851,13 @@ if SAVE_CONTRACT_LOG:
             details_path = (
                 f"{input_filename}/Logs/"
                 f"{START_DATE}_{END_DATE}_{input_filename}_dynamic_contracts_log_TR{TARGET}_DD{MAX_DD}_SZ{SIZE}_STEP{CONTRACT_STEP}_"
-                f"TDD{USE_TRAILING_DD}_monthly_RP{RUNS_PER_MONTH}.csv"
+                f"TDD{USE_TRAILING_DD}_monthly_RP{RUNS_PER_MONTH}_SPD_{SPACING_DAYS}.csv"
             )
         else:
             details_path = (
                 f"{input_filename}/Logs/"
                 f"{START_DATE}_{END_DATE}_{input_filename}_static_contracts_log_TR{TARGET}_DD{MAX_DD}_SZ{SIZE}_"
-                f"TDD{USE_TRAILING_DD}_monthly_RP{RUNS_PER_MONTH}.csv"
+                f"TDD{USE_TRAILING_DD}_monthly_RP{RUNS_PER_MONTH}_SPD_{SPACING_DAYS}.csv"
             )
 
     elif RUN_MODE == "OVERLAPPING":
