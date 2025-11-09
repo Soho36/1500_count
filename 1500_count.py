@@ -6,7 +6,7 @@ import numpy as np
 # === CONFIG ===
 MAX_DD = 1500               # maximum drawdown allowed before "blowup"
 TARGET = 1500               # profit target per run
-SIZE = 1                    # static lot size (if not using dynamic)
+SIZE = 3                    # static lot size (if not using dynamic)
 COST_PER_MONTH = 40         # cost per month per run
 
 # --- Run scheduling mode ---
