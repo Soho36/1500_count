@@ -20,7 +20,7 @@ input_file = "CSVS/all_times_14_flat.csv"
 RUN_MODE = "MONTHLY"            # New runs start at beginning of each month
 
 RUNS_PER_MONTH = 2  # how many new runs to start every month (if RUN_MODE = "MONTHLY")
-SPACING_DAYS = 15  # how many days apart to start runs within the same month
+SPACING_DAYS = 10  # how many days apart to start runs within the same month
 
 # --- Drawdown options ---
 USE_TRAILING_DD = True      # 🔁 switch: True = trailing DD, False = static DD
@@ -172,12 +172,15 @@ while start_idx_pointer < len(start_indices):
                     contracts, cumulative_pnl_today, cumulative_pnl,
                     peak_pnl, trailing_floor
                 )
+            start_date = pd.to_datetime(dataframe.loc[start_idx, 'Date'])
+            end_date = pd.to_datetime(dataframe.loc[i, 'Date'])
+            days_elapsed = (end_date - start_date).days
 
             # record the completed run
             results.append({
                 "Start_Date": dataframe.loc[start_idx, 'Date'],
-                "Rows_to_+Target": days,
-                "Rows_to_blown": None,
+                "Days_to_+Target": days_elapsed,
+                "Days_to_blown": None,
                 "Max_Drawdown": abs(min_cumulative_pnl),
                 "Average_Contracts": sum(contract_history) / len(contract_history) if USE_DYNAMIC_LOT else SIZE,
                 "Minimum_Contracts": min(contract_history) if USE_DYNAMIC_LOT else SIZE,
@@ -233,11 +236,14 @@ while start_idx_pointer < len(start_indices):
                     contracts, cumulative_pnl_today, cumulative_pnl,
                     peak_pnl, trailing_floor
                 )
+            start_date = pd.to_datetime(dataframe.loc[start_idx, 'Date'])
+            end_date = pd.to_datetime(dataframe.loc[i, 'Date'])
+            days_elapsed = (end_date - start_date).days
 
             results.append({
                 "Start_Date": dataframe.loc[start_idx, 'Date'],
-                "Rows_to_+Target": None,
-                "Rows_to_blown": days,
+                "Days_to_+Target": None,
+                "Days_to_blown": days_elapsed,
                 "Max_Drawdown": peak_pnl - cumulative_pnl if USE_TRAILING_DD else abs(min_cumulative_pnl),
                 "Average_Contracts": sum(contract_history) / len(contract_history) if USE_DYNAMIC_LOT else SIZE,
                 "Minimum_Contracts": min(contract_history) if USE_DYNAMIC_LOT else SIZE,
@@ -252,8 +258,8 @@ while start_idx_pointer < len(start_indices):
     if not reached and not blown:
         results.append({
             "Start_Date": dataframe.loc[start_idx, 'Date'],
-            "Rows_to_+Target": None,
-            "Rows_to_blown": None,
+            "Days_to_+Target": None,
+            "Days_to_blown": None,
             "Max_Drawdown": abs(min_cumulative_pnl),
             "Average_Contracts": sum(contract_history) / len(contract_history) if USE_DYNAMIC_LOT else SIZE,
             "Minimum_Contracts": min(contract_history) if USE_DYNAMIC_LOT else SIZE,
@@ -290,7 +296,7 @@ results_df["Start_Date"] = pd.to_datetime(results_df["Start_Date"])
 
 # --- Add a 'Completed' column ---
 # A run is 'completed' if it either reached the target or was blown
-results_df["Completed"] = results_df["Rows_to_+Target"].notna() | results_df["Rows_to_blown"].notna()
+results_df["Completed"] = results_df["Days_to_+Target"].notna() | results_df["Days_to_blown"].notna()
 # --- Add YearMonth column ---
 results_df["YearMonth"] = results_df["Start_Date"].dt.to_period("M").astype(str)
 
@@ -323,7 +329,7 @@ monthly_stats["Successful_Runs"] = monthly_stats["Completed_Runs"] - monthly_sta
 
 # --- Compute DD% for each run ---
 results_df["DD_%"] = (results_df["Max_Drawdown"] / MAX_DD) * 100
-results_df["Days_per_run"] = results_df.apply(lambda row: row["Rows_to_+Target"] if pd.notna(row["Rows_to_+Target"]) else row["Rows_to_blown"], axis=1)
+results_df["Days_per_run"] = results_df.apply(lambda row: row["Days_to_+Target"] if pd.notna(row["Days_to_+Target"]) else row["Days_to_blown"], axis=1)
 
 # Make sure Days_per_run is numeric (in days)
 results_df["Days_per_run"] = pd.to_numeric(results_df["Days_per_run"], errors="coerce")
@@ -597,22 +603,22 @@ else:
 
 
 # --- Blowup stats ---
-blown_df = results_df[results_df['Rows_to_blown'].notna()]
+blown_df = results_df[results_df['Days_to_blown'].notna()]
 
 if not blown_df.empty:
-    min_days_to_blow = blown_df['Rows_to_blown'].min()
-    max_days_to_blow = blown_df['Rows_to_blown'].max()
-    avg_blow_days = round(blown_df['Rows_to_blown'].mean(), 1)
-    median_blow_days = blown_df['Rows_to_blown'].median()
-    mode_blow_days = blown_df['Rows_to_blown'].mode().values
+    min_days_to_blow = blown_df['Days_to_blown'].min()
+    max_days_to_blow = blown_df['Days_to_blown'].max()
+    avg_blow_days = round(blown_df['Days_to_blown'].mean(), 1)
+    median_blow_days = blown_df['Days_to_blown'].median()
+    mode_blow_days = blown_df['Days_to_blown'].mode().values
 else:
     min_days_to_blow = max_days_to_blow = None
     avg_blow_days = median_blow_days = None
     mode_blow_days = []
 
 # --- Stats ---
-valid = results_df.dropna(subset=["Rows_to_+Target"])
-mode_days = valid["Rows_to_+Target"].mode().values
+valid = results_df.dropna(subset=["Days_to_+Target"])
+mode_days = valid["Days_to_+Target"].mode().values
 
 # --- Average maximum DD for blown vs non-blown runs ---
 non_blown = results_df[results_df["Blown"] == False]
@@ -635,11 +641,11 @@ if not valid.empty:
     print("Trailing DD enabled:", USE_TRAILING_DD)
 
     print("\n====== TARGETS ======")
-    print("Min days:", valid["Rows_to_+Target"].min())
-    print("Max days:", valid["Rows_to_+Target"].max())
-    print("Average days:", round(valid["Rows_to_+Target"].mean(), 2))
-    print("Median days:", valid["Rows_to_+Target"].median())
-    print("Std dev days:", round(valid["Rows_to_+Target"].std(), 2))
+    print("Min days:", valid["Days_to_+Target"].min())
+    print("Max days:", valid["Days_to_+Target"].max())
+    print("Average days:", round(valid["Days_to_+Target"].mean(), 2))
+    print("Median days:", valid["Days_to_+Target"].median())
+    print("Std dev days:", round(valid["Days_to_+Target"].std(), 2))
     print(f"Mode days: {mode_days[0]:.0f}" if len(mode_days) > 0 else "Mode days: N/A")
     print("Count of valid runs:", len(valid))
 
@@ -713,12 +719,12 @@ summary_data = {
         MAX_DD,
         "",
         "",
-        valid["Rows_to_+Target"].min() if not valid.empty else None,
-        valid["Rows_to_+Target"].max() if not valid.empty else None,
-        round(valid["Rows_to_+Target"].mean(), 2) if not valid.empty else None,
-        valid["Rows_to_+Target"].median() if not valid.empty else None,
-        round(valid["Rows_to_+Target"].std(), 2) if not valid.empty else None,
-        valid["Rows_to_+Target"].mode().values[0] if not valid.empty else None,
+        valid["Days_to_+Target"].min() if not valid.empty else None,
+        valid["Days_to_+Target"].max() if not valid.empty else None,
+        round(valid["Days_to_+Target"].mean(), 2) if not valid.empty else None,
+        valid["Days_to_+Target"].median() if not valid.empty else None,
+        round(valid["Days_to_+Target"].std(), 2) if not valid.empty else None,
+        valid["Days_to_+Target"].mode().values[0] if not valid.empty else None,
         total_runs,
         resolved_runs,
         len(valid),
@@ -749,11 +755,11 @@ summary_df = pd.DataFrame(summary_data)
 # --- Histogram data ---
 if not valid.empty:
     hist_data = (
-        valid["Rows_to_+Target"]
+        valid["Days_to_+Target"]
         .value_counts()
         .sort_index()
         .reset_index()
-        .rename(columns={"index": "Days", "Rows_to_+Target": "Took_days"})
+        .rename(columns={"index": "Days", "Days_to_+Target": "Took_days"})
     )
 else:
     hist_data = pd.DataFrame(columns=["Days", "Took_days"])
