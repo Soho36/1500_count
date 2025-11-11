@@ -1,1 +1,1 @@
-Days_per_run to be calculated based on start and end dates not rows number
+Add cost per run. Total cost for all years divided by successful runs.

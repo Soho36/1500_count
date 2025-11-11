@@ -4,10 +4,13 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 # === CONFIG ===
-MAX_DD = 1500               # maximum drawdown allowed before "blowup"
-TARGET = 1500               # profit target per run
+MAX_DD = 3000               # maximum drawdown allowed before "blowup"
+TARGET = 3000               # profit target per run
 SIZE = 1                    # static lot size (if not using dynamic)
 COST_PER_MONTH = 40         # cost per month per run
+
+RUNS_PER_MONTH = 1  # how many new runs to start every month (if RUN_MODE = "MONTHLY")
+SPACING_DAYS = 10  # how many days apart to start runs within the same month
 
 input_file = "CSVS/all_times_14_flat.csv"
 # input_file = "CSVS/premarket_only.csv"
@@ -16,11 +19,8 @@ input_file = "CSVS/all_times_14_flat.csv"
 # --- Run scheduling mode ---
 
 # RUN_MODE = "OVERLAPPING"      # New runs start every day (overlapping)
-# RUN_MODE = "SEQUENTIAL"       # New run starts only after previous run ends
-RUN_MODE = "MONTHLY"            # New runs start at beginning of each month
-
-RUNS_PER_MONTH = 2  # how many new runs to start every month (if RUN_MODE = "MONTHLY")
-SPACING_DAYS = 10  # how many days apart to start runs within the same month
+RUN_MODE = "SEQUENTIAL"       # New run starts only after previous run ends
+# RUN_MODE = "MONTHLY"            # New runs start at beginning of each month
 
 # --- Drawdown options ---
 USE_TRAILING_DD = True      # 🔁 switch: True = trailing DD, False = static DD
@@ -353,15 +353,19 @@ yearly_costs = (
 # Merge yearly totals back to main dataframe
 results_df = results_df.merge(yearly_costs, on="Year", how="left")
 
-# Yearly cost summary
+# Yearly cost summary (In the bottom of the All Runs sheet)
 yearly_summary = (
-    results_df.groupby("Year")
+    results_df[results_df["Completed"] == True]  # use only completed runs
+    .groupby("Year")
     .agg(
         Total_Cost=("Run_Cost", "sum"),
         Total_Runs=("Run_Cost", "count"),
         Avg_Run_Length=("Days_per_run", "mean"),
         Blown_Runs=("Blown", "sum"),
-        Successful_Runs=("Blown", lambda x: (x == False).sum()),
+        Successful_Runs=(
+            "Blown",
+            lambda x: ((x == False) & (results_df.loc[x.index, "Completed"] == True)).sum()
+        ),
     )
     .reset_index()
 )
@@ -374,14 +378,25 @@ total_row = pd.DataFrame({
     "Year": ["Total"],
     "Total_Cost": [yearly_summary["Total_Cost"].sum()],
     "Total_Runs": [yearly_summary["Total_Runs"].sum()],
-    "Avg_Run_Length": [results_df["Days_per_run"].mean()],
+    "Avg_Run_Length": [results_df["Days_per_run"].mean()],  # Average over all monthly runs not yearly averages
     "Blown_Runs": [yearly_summary["Blown_Runs"].sum()],
     "Successful_Runs": [yearly_summary["Successful_Runs"].sum()],
     "Blown_%": [(yearly_summary["Blown_Runs"].sum() / yearly_summary["Total_Runs"].sum() * 100).round(2)]
 })
 
+# Add an extra row for *all runs started* (including incomplete)
+all_runs_row = pd.DataFrame({
+    "Year": ["All Runs (including incomplete)"],
+    "Total_Cost": [""],
+    "Total_Runs": [len(results_df)],  # count all runs
+    "Avg_Run_Length": [""],
+    "Blown_Runs": [""],
+    "Successful_Runs": [""],
+    "Blown_%": [""],
+})
+
 # Combine yearly summary + total row
-yearly_summary = pd.concat([yearly_summary, total_row], ignore_index=True)
+yearly_summary = pd.concat([yearly_summary, total_row, all_runs_row], ignore_index=True)
 
 # --- Plotting_1 ---
 # Histogram: Distribution of Max DD Used
