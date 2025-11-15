@@ -4,30 +4,31 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 # === CONFIG ===
-MAX_DD = 3000               # maximum drawdown allowed before "blowup"
-TARGET = 3000               # profit target per run
+MAX_DD = 1500               # maximum drawdown allowed before "blowup"
+TARGET = 500000               # profit target per run
 SIZE = 1                    # static lot size (if not using dynamic)
+MAX_CONTRACTS = 30        # max contracts when using dynamic lot (set to None for no limit)
 COST_PER_MONTH = 40         # cost per month per run
 
-RUNS_PER_MONTH = 1  # how many new runs to start every month (if RUN_MODE = "MONTHLY")
+RUNS_PER_MONTH = 2  # how many new runs to start every month (if RUN_MODE = "MONTHLY")
 SPACING_DAYS = 10  # how many days apart to start runs within the same month
 
 input_file = "CSVS/all_times_14_flat.csv"
 # input_file = "CSVS/premarket_only.csv"
 # input_file = "CSVS/top_times_only.csv"
 
-# --- Run scheduling mode ---
 
-# RUN_MODE = "OVERLAPPING"      # New runs start every day (overlapping)
-RUN_MODE = "SEQUENTIAL"       # New run starts only after previous run ends
+# --- Run scheduling mode ---
+RUN_MODE = "OVERLAPPING"      # New runs start every day (overlapping)
+# RUN_MODE = "SEQUENTIAL"       # New run starts only after previous run ends
 # RUN_MODE = "MONTHLY"            # New runs start at beginning of each month
 
 # --- Drawdown options ---
-USE_TRAILING_DD = True      # 🔁 switch: True = trailing DD, False = static DD
+USE_TRAILING_DD = False      # 🔁 switch: True = trailing DD, False = static DD
 
 # --- Dynamic lot options ---
-USE_DYNAMIC_LOT = False     # 🔄 switch: True = dynamic lot, False = static
-CONTRACT_STEP = 1000         # add/remove 1 contract per $500 gain/loss
+USE_DYNAMIC_LOT = True     # 🔄 switch: True = dynamic lot, False = static
+CONTRACT_STEP = 6000         # add/remove 1 contract per X gain/loss
 
 # --- Logging options ---
 SAVE_CONTRACT_LOG = True    # save detailed per-day info for first N runs
@@ -40,7 +41,7 @@ START_DATE = None
 END_DATE = None
 # END_DATE = "2023-07-29"             # set to None to disable filtering "YYYY-MM-DD"
 
-SHOW_PLOTS = False  # set to True to display plots interactively
+SHOW_PLOTS = True  # set to True to display plots interactively
 
 dataframe = pd.read_csv(input_file, sep="\t")
 input_filename = (os.path.basename(input_file)).replace(".csv", "")
@@ -181,7 +182,7 @@ while start_idx_pointer < len(start_indices):
                 "Start_Date": dataframe.loc[start_idx, 'Date'],
                 "Days_to_+Target": days_elapsed,
                 "Days_to_blown": None,
-                "Max_Drawdown": abs(min_cumulative_pnl),
+                "Max_Drawdown_Abs": abs(min_cumulative_pnl),
                 "Average_Contracts": sum(contract_history) / len(contract_history) if USE_DYNAMIC_LOT else SIZE,
                 "Minimum_Contracts": min(contract_history) if USE_DYNAMIC_LOT else SIZE,
                 "Maximum_Contracts": max(contract_history) if USE_DYNAMIC_LOT else SIZE,
@@ -197,7 +198,7 @@ while start_idx_pointer < len(start_indices):
 
         # --- Update contract size dynamically (only if enabled) ---
         if USE_DYNAMIC_LOT:
-            contracts = max(1, 1 + int(cumulative_pnl // CONTRACT_STEP))
+            contracts = min(MAX_CONTRACTS, max(1, 1 + int(cumulative_pnl // CONTRACT_STEP)))
 
         # --- Update DD logic ---
         if USE_TRAILING_DD:
@@ -244,7 +245,7 @@ while start_idx_pointer < len(start_indices):
                 "Start_Date": dataframe.loc[start_idx, 'Date'],
                 "Days_to_+Target": None,
                 "Days_to_blown": days_elapsed,
-                "Max_Drawdown": peak_pnl - cumulative_pnl if USE_TRAILING_DD else abs(min_cumulative_pnl),
+                "Max_Drawdown_Abs": peak_pnl - cumulative_pnl if USE_TRAILING_DD else abs(min_cumulative_pnl),
                 "Average_Contracts": sum(contract_history) / len(contract_history) if USE_DYNAMIC_LOT else SIZE,
                 "Minimum_Contracts": min(contract_history) if USE_DYNAMIC_LOT else SIZE,
                 "Maximum_Contracts": max(contract_history) if USE_DYNAMIC_LOT else SIZE,
@@ -260,7 +261,7 @@ while start_idx_pointer < len(start_indices):
             "Start_Date": dataframe.loc[start_idx, 'Date'],
             "Days_to_+Target": None,
             "Days_to_blown": None,
-            "Max_Drawdown": abs(min_cumulative_pnl),
+            "Max_Drawdown_Abs": abs(min_cumulative_pnl),
             "Average_Contracts": sum(contract_history) / len(contract_history) if USE_DYNAMIC_LOT else SIZE,
             "Minimum_Contracts": min(contract_history) if USE_DYNAMIC_LOT else SIZE,
             "Maximum_Contracts": max(contract_history) if USE_DYNAMIC_LOT else SIZE,
@@ -328,7 +329,7 @@ monthly_stats["Successful_Runs"] = monthly_stats["Completed_Runs"] - monthly_sta
 
 
 # --- Compute DD% for each run ---
-results_df["DD_%"] = (results_df["Max_Drawdown"] / MAX_DD) * 100
+results_df["DD_%"] = (results_df["Max_Drawdown_Abs"] / MAX_DD) * 100
 results_df["Days_per_run"] = results_df.apply(lambda row: row["Days_to_+Target"] if pd.notna(row["Days_to_+Target"]) else row["Days_to_blown"], axis=1)
 
 # Make sure Days_per_run is numeric (in days)
@@ -337,8 +338,12 @@ results_df["Days_per_run"] = pd.to_numeric(results_df["Days_per_run"], errors="c
 # Compute how many 30-day periods the run lasted (ceil division)
 results_df["Months_per_run"] = np.ceil(results_df["Days_per_run"] / 30).astype("Int64")
 
-# Calculate total cost
-results_df["Run_Cost"] = results_df["Months_per_run"] * COST_PER_MONTH
+# Calculate total cost (if Months_per_run is 0, charge for 1 month)
+results_df["Run_Cost"] = np.where(
+    results_df["Months_per_run"].fillna(0) > 0,
+    results_df["Months_per_run"].fillna(0) * COST_PER_MONTH,
+    COST_PER_MONTH
+)
 
 # Extract year from Start_Date
 results_df["Year"] = results_df["Start_Date"].dt.year
@@ -608,9 +613,9 @@ plt.savefig(save_path)
 print(f"✅ Year_Monthly_Blown_Run_Chart saved to: {save_path}")
 
 # --- Average maximum DD (as % of limit)
-if "Max_Drawdown" in results_df.columns:
-    avg_dd = results_df["Max_Drawdown"].mean()
-    median_dd = results_df["Max_Drawdown"].median()
+if "Max_Drawdown_Abs" in results_df.columns:
+    avg_dd = results_df["Max_Drawdown_Abs"].mean()
+    median_dd = results_df["Max_Drawdown_Abs"].median()
     avg_dd_pct = (avg_dd / MAX_DD) * 100
     median_dd_pct = (median_dd / MAX_DD) * 100
 else:
@@ -639,9 +644,9 @@ mode_days = valid["Days_to_+Target"].mode().values
 non_blown = results_df[results_df["Blown"] == False]
 blown = results_df[results_df["Blown"] == True]
 
-avg_dd_all = results_df["Max_Drawdown"].mean()
-avg_dd_nonblown = non_blown["Max_Drawdown"].mean() if not non_blown.empty else None
-avg_dd_blown = blown["Max_Drawdown"].mean() if not blown.empty else None
+avg_dd_all = results_df["Max_Drawdown_Abs"].mean()
+avg_dd_nonblown = non_blown["Max_Drawdown_Abs"].mean() if not non_blown.empty else None
+avg_dd_blown = blown["Max_Drawdown_Abs"].mean() if not blown.empty else None
 
 avg_dd_all_pct = (avg_dd_all / MAX_DD) * 100
 avg_dd_nonblown_pct = (avg_dd_nonblown / MAX_DD) * 100 if avg_dd_nonblown is not None else None
@@ -852,7 +857,7 @@ with pd.ExcelWriter(f"{details_path}", engine="xlsxwriter") as writer:
     worksheet_summary.set_row(21, None, bold_format)  # Row 5
     worksheet_summary.set_row(28, None, bold_format)  # Row 9
 
-    worksheet_monthly_blown.set_column(0, 4, 15)  # Adjust column A width
+    worksheet_monthly_blown.set_column(0, 5, 15)  # Adjust column A width
     # worksheet_monthly_blown.set_column(1, 1, 15)  # Adjust column B width
     # worksheet_monthly_blown.set_column(2, 2, 15)  # Adjust column C width
     # worksheet_monthly_blown.set_column(3, 3, 15)  # Adjust column D width

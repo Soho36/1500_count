@@ -1,0 +1,5 @@
+First of all you make 1500 evaluations with higher risk of blowup, lets say premarket 2 contracts.
+Then 1500 PA with lowest possible risk, lets say premarket 1 contract (meanwhile making for more evaluations).
+Each new PA we trade at minimal risk as above.
+Then for each PA trailing DD eventually stops and we get much better DD metrix and risk of blowing lowers.
+
