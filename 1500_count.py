@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 # === CONFIG ===
-MAX_DD = 1500               # maximum drawdown allowed before "blowup"
+MAX_DD = 6000               # maximum drawdown allowed before "blowup"
 TARGET = 500000               # profit target per run
 SIZE = 1                    # static lot size (if not using dynamic)
 MAX_CONTRACTS = 30        # max contracts when using dynamic lot (set to None for no limit)
