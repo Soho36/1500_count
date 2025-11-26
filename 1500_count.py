@@ -4,8 +4,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 # === CONFIG ===
-MAX_DD = 6000               # maximum drawdown allowed before "blowup"
-TARGET = 500000               # profit target per run
+MAX_DD = 4500               # maximum drawdown allowed before "blowup"
+TARGET = 4500               # profit target per run
 SIZE = 1                    # static lot size (if not using dynamic)
 MAX_CONTRACTS = 30        # max contracts when using dynamic lot (set to None for no limit)
 COST_PER_MONTH = 40         # cost per month per run
@@ -16,6 +16,7 @@ SPACING_DAYS = 10  # how many days apart to start runs within the same month
 input_file = "CSVS/all_times_14_flat.csv"
 # input_file = "CSVS/premarket_only.csv"
 # input_file = "CSVS/top_times_only.csv"
+# input_file = "CSVS/all_times_14_flat_2_percent_rule.csv"
 
 
 # --- Run scheduling mode ---
@@ -24,10 +25,10 @@ RUN_MODE = "OVERLAPPING"      # New runs start every day (overlapping)
 # RUN_MODE = "MONTHLY"            # New runs start at beginning of each month
 
 # --- Drawdown options ---
-USE_TRAILING_DD = False      # 🔁 switch: True = trailing DD, False = static DD
+USE_TRAILING_DD = True      # 🔁 switch: True = trailing DD, False = static DD
 
 # --- Dynamic lot options ---
-USE_DYNAMIC_LOT = True     # 🔄 switch: True = dynamic lot, False = static
+USE_DYNAMIC_LOT = False     # 🔄 switch: True = dynamic lot, False = static
 CONTRACT_STEP = 6000         # add/remove 1 contract per X gain/loss
 
 # --- Logging options ---
@@ -39,7 +40,7 @@ MAX_RUNS_TO_LOG = 1500       # limit detailed log to first N runs
 # START_DATE = "2025-09-12"          # set to None to disable filtering "YYYY-MM-DD"
 START_DATE = None
 END_DATE = None
-# END_DATE = "2023-07-29"             # set to None to disable filtering "YYYY-MM-DD"
+# END_DATE = "2020-09-29"             # set to None to disable filtering "YYYY-MM-DD"
 
 SHOW_PLOTS = True  # set to True to display plots interactively
 

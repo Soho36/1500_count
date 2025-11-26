@@ -15,6 +15,7 @@ namespace NinjaTrader.NinjaScript.Strategies
         private double pendingStopPrice;
         private double entryPrice;
         private double riskPerTrade;
+		private DateTime lastFlattenDate = Core.Globals.MinDate;
 
         protected override void OnStateChange()
         {
@@ -43,6 +44,32 @@ namespace NinjaTrader.NinjaScript.Strategies
 
         protected override void OnBarUpdate()
 		{
+			// === DAILY FLATTEN LOGIC ===
+			if (ToTime(Time[0]) >= 170000 && ToTime(Time[0]) < 170100) // between 17:00:00 and 17:01:00
+			{
+				if (lastFlattenDate.Date != Time[0].Date)
+				{
+					lastFlattenDate = Time[0];
+
+					// 1️⃣ Close any open long position
+					if (Position.MarketPosition == MarketPosition.Long)
+					{
+						Print($"[{Time[0]}] ⏰ 17:00 flatten trigger → closing open long position");
+						ExitLong("DailyFlatten", "Long1");
+					}
+
+					// 2️⃣ Cancel any working buy stop/limit order
+					if (longOrder != null &&
+						(longOrder.OrderState == OrderState.Working || longOrder.OrderState == OrderState.Accepted))
+					{
+						Print($"[{Time[0]}] ⏰ 17:00 flatten trigger → cancelling pending entry order @ {longOrder.StopPrice}");
+						CancelOrder(longOrder);
+					}
+				}
+
+				return;	// skip the rest of the logic this bar
+			}
+
 			if (CurrentBar < BarsRequiredToTrade) return;
 			if (State != State.Realtime) return;
 
