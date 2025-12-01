@@ -4,8 +4,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 # === CONFIG ===
-MAX_DD = 2500               # maximum drawdown allowed before "blowup"
-TARGET = 3000               # profit target per run
+MAX_DD = 625               # maximum drawdown allowed before "blowup"
+TARGET = 2000               # profit target per run
 SIZE = 1                    # static lot size (if not using dynamic)
 MAX_CONTRACTS = 30        # max contracts when using dynamic lot (set to None for no limit)
 COST_PER_MONTH = 40         # cost per month per run
@@ -14,8 +14,8 @@ RUNS_PER_MONTH = 2  # how many new runs to start every month (if RUN_MODE = "MON
 SPACING_DAYS = 10  # how many days apart to start runs within the same month
 
 # input_file = "CSVS/all_times_14_flat.csv"
-# input_file = "CSVS/premarket_only.csv"
-input_file = "CSVS/all_times_14_flat_50_range.csv"
+input_file = "CSVS/premarket_only.csv"
+# input_file = "CSVS/all_times_14_flat_50_range.csv"
 # input_file = "CSVS/top_times_only.csv"
 # input_file = "CSVS/all_times_14_flat_2_percent_rule.csv"
 
@@ -26,7 +26,7 @@ RUN_MODE = "OVERLAPPING"      # New runs start every day (overlapping)
 # RUN_MODE = "MONTHLY"            # New runs start at beginning of each month
 
 # --- Drawdown options ---
-USE_TRAILING_DD = True      # 🔁 switch: True = trailing DD, False = static DD
+USE_TRAILING_DD = False     # 🔁 switch: True = trailing DD, False = static DD
 
 # --- Dynamic lot options ---
 USE_DYNAMIC_LOT = False     # 🔄 switch: True = dynamic lot, False = static
