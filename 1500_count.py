@@ -13,10 +13,10 @@ COST_PER_MONTH = 40         # cost per month per run
 RUNS_PER_MONTH = 2  # how many new runs to start every month (if RUN_MODE = "MONTHLY")
 SPACING_DAYS = 10  # how many days apart to start runs within the same month
 
-# input_file = "CSVS/all_times_14_flat.csv"
+input_file = "CSVS/all_times_14_flat.csv"
 # input_file = "CSVS/premarket_only.csv"
-input_file = "CSVS/all_times_14_flat_50_range.csv"
-# input_file = "CSVS/top_times_only.csv"
+# input_file = "CSVS/all_times_14_flat_50_range.csv"
+# input_file = "CSVS/top_tgit imes_only.csv"
 # input_file = "CSVS/all_times_14_flat_2_percent_rule.csv"
 
 
@@ -24,6 +24,8 @@ input_file = "CSVS/all_times_14_flat_50_range.csv"
 RUN_MODE = "OVERLAPPING"      # New runs start every day (overlapping)
 # RUN_MODE = "SEQUENTIAL"       # New run starts only after previous run ends
 # RUN_MODE = "MONTHLY"            # New runs start at beginning of each month
+# RUN_MODE = "WEEKDAY_ONLY"
+TARGET_WEEKDAY = 4   # 0=Mon, 1=Tue, 2=Wed, 3=Thu, 4=Fri
 
 # --- Drawdown options ---
 USE_TRAILING_DD = True     # 🔁 switch: True = trailing DD, False = static DD
@@ -128,6 +130,11 @@ if RUN_MODE == "MONTHLY":
 
         start_indices.extend(selected_indices)
 
+elif RUN_MODE == "WEEKDAY_ONLY":
+    # Start runs only on selected weekday
+    weekday_series = pd.to_datetime(dataframe["Date"]).dt.weekday
+    start_indices = dataframe.index[weekday_series == TARGET_WEEKDAY].tolist()
+
 else:
     start_indices = list(range(len(dataframe)))
 
@@ -156,13 +163,17 @@ while start_idx_pointer < len(start_indices):
 
     # --- iterate through data until run ends or dataset ends ---
     for i in range(start_idx, len(dataframe)):
+        if RUN_MODE == "WEEKDAY_ONLY":
+            if pd.to_datetime(dataframe.loc[i, "Date"]).weekday() != TARGET_WEEKDAY:
+                continue
+
         # Record contract size
         contract_history.append(contracts)
 
         # --- Apply today's PnL ---
         cumulative_pnl_today = dataframe.loc[i, 'P/L (Net)'] * contracts
         projected_pnl = cumulative_pnl + cumulative_pnl_today
-        days += 1
+        days += 1   # Right now, skipping non-Mondays still increments days because your code does:
 
         # --- Check if today overshoots the target ---
         if projected_pnl >= TARGET:
@@ -311,7 +322,8 @@ while start_idx_pointer < len(start_indices):
 
     elif RUN_MODE == "MONTHLY":
         start_idx_pointer += 1
-
+    elif RUN_MODE == "WEEKDAY_ONLY":
+        start_idx_pointer += 1
 
 # Monthly subtotals of blown runs
 
