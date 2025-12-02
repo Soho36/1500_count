@@ -13,9 +13,9 @@ COST_PER_MONTH = 40         # cost per month per run
 RUNS_PER_MONTH = 2  # how many new runs to start every month (if RUN_MODE = "MONTHLY")
 SPACING_DAYS = 10  # how many days apart to start runs within the same month
 
-# input_file = "CSVS/all_times_14_flat.csv"
+input_file = "CSVS/all_times_14_flat.csv"
 # input_file = "CSVS/premarket_only.csv"
-input_file = "CSVS/all_times_14_flat_50_range.csv"
+# input_file = "CSVS/all_times_14_flat_50_range.csv"
 # input_file = "CSVS/top_times_only.csv"
 # input_file = "CSVS/all_times_14_flat_2_percent_rule.csv"
 
