@@ -13,9 +13,9 @@ SEP = "\t"
 input_filename = (os.path.basename(INPUT_FILE)).replace(".csv", "")
 
 # Simulation parameters
-MAX_DD = 2500
-TARGET = 3000
-SIZE = 3
+MAX_DD = 1500
+TARGET = 1500
+SIZE = 1
 
 # Trailing drawdown settings
 USE_TRAILING_DD = True
