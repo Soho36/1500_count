@@ -8,17 +8,17 @@ import numpy as np
 
 CSV_PATH = "CSVS/premarket_only.csv"
 START_CAPITAL = 1500
-NUM_ACCOUNTS = 5
 
 # START_DATE = "2020-02-24"
 # END_DATE = "2021-06-18"
 START_DATE = None
 END_DATE = None
 
-MAX_ACCOUNTS = 5
+MAX_ACCOUNTS = 20
 # thresholds in money (negative drawdown values where we start next account)
 # E.g. start account2 when any active account reaches -600, start 3 at -1000, etc.
-START_THRESHOLDS = [-800, -800, -800, -800]  # length = MAX_ACCOUNTS-1
+START_THRESHOLD = -400  # length = MAX_ACCOUNTS-1
+RECOVERY_LEVEL = -0   # require DD to recover above this before next account can start
 MIN_DAYS_BETWEEN_STARTS = 30  # optional guard
 
 SHOW_PORTFOLIO_TOTAL_EQUITY = False     # if True, show total equity of all accounts combined
@@ -83,65 +83,78 @@ pl = df.set_index("Date")["P.L"]
 equity_original = START_CAPITAL + pl.cumsum()
 
 
-def simulate_staggered_accounts(pl_series, start_capital, max_accounts, thresholds):
+def simulate_staggered_accounts(pl_series, start_capital, max_accounts, threshold):
     dates = pl_series.index
-    # state for each account: dict with keys start_idx, equity, rolling_max, alive
     accounts = []
     next_threshold_idx = 0
     last_start_day = -999
 
-    # records
+    waiting_for_recovery = False  # <<< NEW
+
     portfolio_equity = []
     num_alive = []
-    account_equities_over_time = []  # list of lists: equity per account (NaN if not started)
+    account_equities_over_time = []
 
     for i_date, date in enumerate(dates):
 
-        # update active accounts
+        # ----- UPDATE EXISTING ACCOUNTS -----
         today_equities = []
         for acc in accounts:
             if acc['alive'] and i_date >= acc['start_idx']:
-                # apply today's PnL to this account
-                acc['equity'] += pl_series.iloc[i_date]
 
+                acc['equity'] += pl_series.iloc[i_date]
                 acc['rolling_max'] = max(acc['rolling_max'], acc['equity'])
                 acc['drawdown'] = acc['equity'] - acc['rolling_max']
 
-                # check blowout
                 if acc['equity'] <= 0:
                     acc['alive'] = False
 
             today_equities.append(acc['equity'] if acc['start_idx'] <= i_date else np.nan)
 
-        # portfolio equity = sum of active accounts + not-started accounts excluded
-        total_equity = sum([acc['equity'] for acc in accounts])
+        # ----- RECORDING -----
+        total_equity = sum(a['equity'] for a in accounts)
         portfolio_equity.append(total_equity)
 
-        # record per-account equities aligned to dates (pad with NaN for not-started)
         row = [np.nan] * max_accounts
         for k, acc in enumerate(accounts):
             row[k] = acc['equity'] if acc['start_idx'] <= i_date else np.nan
         account_equities_over_time.append(row)
 
-        num_alive.append(sum(1 for acc in accounts if acc['alive']))
+        num_alive.append(sum(a['alive'] for a in accounts))
 
-        # decide whether to start a new account:
+        # =====================================================
+        #   NEW ACCOUNT START LOGIC WITH RECOVERY REQUIREMENT
+        # =====================================================
+
         if len(accounts) < max_accounts:
 
+            # ---- 1) Always start first account immediately ----
             if len(accounts) == 0:
-                # Always start the first account
                 can_start = True
 
-            elif next_threshold_idx >= len(thresholds):
-                can_start = True
             else:
-                can_start = False
-                for acc in accounts:
-                    if acc['drawdown'] <= thresholds[next_threshold_idx]:
-                        can_start = True
-                        break
+                # Check system-wide max drawdown among active accounts
+                current_dd = min(acc['drawdown'] for acc in accounts if acc['start_idx'] <= i_date)
 
+                # (A) If we are still waiting for recovery → do nothing
+                if waiting_for_recovery:
+                    can_start = False
+
+                    # Check if we have recovered enough
+                    if current_dd >= RECOVERY_LEVEL:
+                        waiting_for_recovery = False
+
+                # (B) If not waiting for recovery → check threshold trigger
+                else:
+                    if current_dd <= START_THRESHOLD:
+                        can_start = True
+                        waiting_for_recovery = True
+                    else:
+                        can_start = False
+
+            # ---- 2) Time-based guard ----
             if can_start and (i_date - last_start_day) >= MIN_DAYS_BETWEEN_STARTS:
+
                 new_acc = {
                     'start_idx': i_date,
                     'equity': start_capital,
@@ -149,22 +162,20 @@ def simulate_staggered_accounts(pl_series, start_capital, max_accounts, threshol
                     'drawdown': 0.0,
                     'alive': True
                 }
+
                 accounts.append(new_acc)
                 last_start_day = i_date
                 next_threshold_idx += 1
 
-    # convert records to pandas Series/DataFrame outside
-    import pandas as pd
+    # Convert to pandas
     portfolio_eq_series = pd.Series(portfolio_equity, index=dates)
     acc_eq_df = pd.DataFrame(account_equities_over_time, index=dates,
-                             columns=[f"acc_{i + 1}" for i in range(max_accounts)])
+                             columns=[f"acc_{i+1}" for i in range(max_accounts)])
     num_alive_series = pd.Series(num_alive, index=dates)
     return portfolio_eq_series, acc_eq_df, num_alive_series
 
 
-# run simulation
-
-portfolio_eq, acc_eq_df, num_alive = simulate_staggered_accounts(pl, START_CAPITAL, MAX_ACCOUNTS, START_THRESHOLDS)
+portfolio_eq, acc_eq_df, num_alive = simulate_staggered_accounts(pl, START_CAPITAL, MAX_ACCOUNTS, START_THRESHOLD)
 
 print(f"Acc equity diff{acc_eq_df.head()}")
 
