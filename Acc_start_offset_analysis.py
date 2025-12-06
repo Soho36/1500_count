@@ -1,13 +1,14 @@
 import pandas as pd
 import matplotlib.pyplot as plt
+import numpy as np
 
 # ======================
 #  CONFIG
 # ======================
-# CSV_PATH = "CSVS/all_times_14_flat_ONLY_PNL.csv"
+
 CSV_PATH = "CSVS/premarket_only.csv"
-START_CAPITAL = 5000
-NUM_ACCOUNTS = 1
+START_CAPITAL = 1500
+NUM_ACCOUNTS = 5
 
 # START_DATE = "2020-02-24"
 # END_DATE = "2021-06-18"
@@ -15,7 +16,7 @@ NUM_ACCOUNTS = 1
 START_DATE = None
 END_DATE = None
 
-USE_MANUAL_OFFSETS = True
+USE_MANUAL_OFFSETS = False
 MANUAL_OFFSETS = [360, 60, 90, 120, 15]  # in trading days
 
 # ======================
@@ -30,10 +31,10 @@ def calculate_max_drawdown(equity):
     return dd.min()
 
 
-def build_equity_from_pl(pl_series, offset, starting_capital=5000):
+def build_equity_from_pl(pl_series, offset, START_CAPITAL):
     """Start the equity curve from <offset> days later using correct P&L values."""
-    shifted_pl = pl_series.iloc[offset:]  # <-- FIXED
-    equity = starting_capital + shifted_pl.cumsum()
+    shifted_pl = pl_series.iloc[offset:]
+    equity = START_CAPITAL + shifted_pl.cumsum()
     return equity
 
 
@@ -97,18 +98,126 @@ for off in best_offsets:
 portfolio_dd = calculate_max_drawdown(combined)
 print(f"\nPortfolio Max Drawdown = {portfolio_dd:.2f}")
 
+MAX_ACCOUNTS = 5
+# thresholds in money (negative drawdown values where we start next account)
+# E.g. start account2 when any active account reaches -600, start 3 at -1000, etc.
+START_THRESHOLDS = [-1000, -1000, -1000, -1000]  # length = MAX_ACCOUNTS-1
+MIN_DAYS_BETWEEN_STARTS = 5  # optional guard
+
+
+def simulate_staggered_accounts(pl_series, start_capital, max_accounts, thresholds):
+    dates = pl_series.index
+    n = len(dates)
+    # state for each account: dict with keys start_idx, equity, rolling_max, alive
+    accounts = []
+    next_threshold_idx = 0
+    last_start_day = -999
+
+    # records
+    portfolio_equity = []
+    num_alive = []
+    account_equities_over_time = []  # list of lists: equity per account (NaN if not started)
+
+    for i_date, date in enumerate(dates):
+        today_pl = pl_series.iloc[i_date]
+
+        # update active accounts
+        today_equities = []
+        for acc in accounts:
+            if acc['alive'] and i_date >= acc['start_idx']:
+                # apply today's PnL to this account
+                acc['equity'] += pl_series.iloc[i_date]
+
+                acc['rolling_max'] = max(acc['rolling_max'], acc['equity'])
+                acc['drawdown'] = acc['equity'] - acc['rolling_max']
+
+                # check blowout
+                if acc['equity'] <= 0:
+                    acc['alive'] = False
+
+            today_equities.append(acc['equity'] if acc['start_idx'] <= i_date else np.nan)
+
+        # portfolio equity = sum of active accounts + not-started accounts excluded
+        total_equity = sum([acc['equity'] for acc in accounts])
+        portfolio_equity.append(total_equity)
+
+        # record per-account equities aligned to dates (pad with NaN for not-started)
+        row = [np.nan] * max_accounts
+        for k, acc in enumerate(accounts):
+            row[k] = acc['equity'] if acc['start_idx'] <= i_date else np.nan
+        account_equities_over_time.append(row)
+
+        num_alive.append(sum(1 for acc in accounts if acc['alive']))
+
+        # decide whether to start a new account:
+        if len(accounts) < max_accounts:
+
+            if len(accounts) == 0:
+                # Always start the first account
+                can_start = True
+
+            elif next_threshold_idx >= len(thresholds):
+                can_start = True
+            else:
+                can_start = False
+                for acc in accounts:
+                    if acc['drawdown'] <= thresholds[next_threshold_idx]:
+                        can_start = True
+                        break
+
+            if can_start and (i_date - last_start_day) >= MIN_DAYS_BETWEEN_STARTS:
+                new_acc = {
+                    'start_idx': i_date,
+                    'equity': start_capital,
+                    'rolling_max': start_capital,
+                    'drawdown': 0.0,
+                    'alive': True
+                }
+                accounts.append(new_acc)
+                last_start_day = i_date
+                next_threshold_idx += 1
+
+    # convert records to pandas Series/DataFrame outside
+    import pandas as pd
+    portfolio_eq_series = pd.Series(portfolio_equity, index=dates)
+    acc_eq_df = pd.DataFrame(account_equities_over_time, index=dates,
+                             columns=[f"acc_{i + 1}" for i in range(max_accounts)])
+    num_alive_series = pd.Series(num_alive, index=dates)
+    return portfolio_eq_series, acc_eq_df, num_alive_series
+
+
+# run simulation
+portfolio_eq, acc_eq_df, num_alive = simulate_staggered_accounts(pl, START_CAPITAL, MAX_ACCOUNTS, START_THRESHOLDS)
+
+print(f"Acc equity diff{acc_eq_df.head()}")
+
+# plot portfolio and per-account equities
+plt.figure(figsize=(14, 6))
+plt.plot(portfolio_eq.index, portfolio_eq.values, label="Portfolio total equity", linewidth=2)
+for c in acc_eq_df.columns:
+    plt.plot(acc_eq_df.index, acc_eq_df[c], alpha=0.8, label=c)
+plt.legend()
+plt.title("Staggered Accounts Simulation")
+plt.grid(True)
+# plt.show()
+
+# quick stats
+print("Final portfolio equity:", portfolio_eq.iloc[-1])
+print("Num accounts started:", acc_eq_df.notna().any().sum())
+print("Number of accounts still alive at end:", num_alive.iloc[-1])
+
 # ======================
 #  PLOTTING
 # ======================
 
-plt.figure(figsize=(14, 6))
-plt.plot(equity_original.index, equity_original.values, label="Original", linewidth=2)
-for off in best_offsets:
-    eq = build_equity_from_pl(pl, off, START_CAPITAL)
-    plt.plot(eq.index, eq.values, label=f"Offset {off} days")
-plt.legend()
-plt.grid(True)
-plt.tight_layout()
+# plt.figure(figsize=(14, 6))
+# plt.plot(equity_original.index, equity_original.values, label="Original", linewidth=2)
+# for off in best_offsets:
+#     eq = build_equity_from_pl(pl, off, START_CAPITAL)
+#     plt.plot(eq.index, eq.values, label=f"Offset {off} days")
+# plt.legend()
+# plt.grid(True)
+# plt.tight_layout()
 
 # ======================
 #  DRAWDOWN PLOT
