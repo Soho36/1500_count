@@ -21,9 +21,9 @@ input_file = "CSVS/all_times_14_flat.csv"
 
 
 # --- Run scheduling mode ---
-RUN_MODE = "OVERLAPPING"      # New runs start every day (overlapping)
+# RUN_MODE = "OVERLAPPING"      # New runs start every day (overlapping)
 # RUN_MODE = "SEQUENTIAL"       # New run starts only after previous run ends
-# RUN_MODE = "MONTHLY"            # New runs start at beginning of each month
+RUN_MODE = "MONTHLY"            # New runs start at beginning of each month
 # RUN_MODE = "WEEKDAY_ONLY"
 TARGET_WEEKDAY = 4   # 0=Mon, 1=Tue, 2=Wed, 3=Thu, 4=Fri
 
