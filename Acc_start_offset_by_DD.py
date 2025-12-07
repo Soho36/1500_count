@@ -5,21 +5,22 @@ import numpy as np
 # ========================================================================================
 #  CONFIG
 # ========================================================================================
+pd.set_option('display.min_rows', 1000)         # Show min 1000 rows when printing
+pd.set_option('display.max_rows', 2000)         # Show max 100 rows when printing
 
 CSV_PATH = "CSVS/premarket_only.csv"
+# CSV_PATH = "CSVS/all_times_14_flat.csv"
 START_CAPITAL = 1500
 
-# START_DATE = "2020-02-24"
+# START_DATE = "2020-03-29"
 # END_DATE = "2021-06-18"
 START_DATE = None
 END_DATE = None
 
 MAX_ACCOUNTS = 20
-# thresholds in money (negative drawdown values where we start next account)
-# E.g. start account2 when any active account reaches -600, start 3 at -1000, etc.
-START_THRESHOLD = -400  # length = MAX_ACCOUNTS-1
+START_THRESHOLD = -1000  # trigger to start next account
 RECOVERY_LEVEL = -0   # require DD to recover above this before next account can start
-MIN_DAYS_BETWEEN_STARTS = 30  # optional guard
+MIN_DAYS_BETWEEN_STARTS = 30  # minimum days between starting new accounts
 
 SHOW_PORTFOLIO_TOTAL_EQUITY = False     # if True, show total equity of all accounts combined
 
@@ -83,20 +84,27 @@ pl = df.set_index("Date")["P.L"]
 equity_original = START_CAPITAL + pl.cumsum()
 
 
-def simulate_staggered_accounts(pl_series, start_capital, max_accounts, threshold):
+def simulate_staggered_accounts(pl_series, start_capital, max_accounts):
     dates = pl_series.index
     accounts = []
-    next_threshold_idx = 0
-    last_start_day = -999
+    # --- START FIRST ACCOUNT RIGHT AWAY ---
+    accounts.append({
+        'start_idx': 0,
+        'equity': start_capital,
+        'rolling_max': start_capital,
+        'drawdown': 0.0,
+        'alive': True
+    })
 
-    waiting_for_recovery = False  # <<< NEW
+    next_threshold_idx = 0
+    last_start_day = 0
+    waiting_for_recovery = False
 
     portfolio_equity = []
     num_alive = []
     account_equities_over_time = []
 
     for i_date, date in enumerate(dates):
-
         # ----- UPDATE EXISTING ACCOUNTS -----
         today_equities = []
         for acc in accounts:
@@ -175,9 +183,9 @@ def simulate_staggered_accounts(pl_series, start_capital, max_accounts, threshol
     return portfolio_eq_series, acc_eq_df, num_alive_series
 
 
-portfolio_eq, acc_eq_df, num_alive = simulate_staggered_accounts(pl, START_CAPITAL, MAX_ACCOUNTS, START_THRESHOLD)
+portfolio_eq, acc_eq_df, num_alive = simulate_staggered_accounts(pl, START_CAPITAL, MAX_ACCOUNTS)
 
-print(f"Acc equity diff{acc_eq_df.head()}")
+print(f"Acc equity diff{acc_eq_df}")
 
 # plot portfolio and per-account equities
 plt.figure(figsize=(14, 6))
