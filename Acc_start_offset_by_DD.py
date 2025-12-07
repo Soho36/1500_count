@@ -8,12 +8,12 @@ import numpy as np
 pd.set_option('display.min_rows', 1000)         # Show min 1000 rows when printing
 pd.set_option('display.max_rows', 2000)         # Show max 100 rows when printing
 
-CSV_PATH = "CSVS/premarket_only.csv"
-# CSV_PATH = "CSVS/all_times_14_flat.csv"
+# CSV_PATH = "CSVS/premarket_only.csv"
+CSV_PATH = "CSVS/all_times_14_flat.csv"
 START_CAPITAL = 1500
 TRAILING_DD_LIMIT = 1500  # account is closed if DD exceeds this value
-DD_FREEZE_TRIGGER = START_CAPITAL + TRAILING_DD_LIMIT + 100   # 3100
-FROZEN_DD_FLOOR = START_CAPITAL + 100                        # 1600
+DD_FREEZE_TRIGGER = START_CAPITAL + TRAILING_DD_LIMIT + 100
+FROZEN_DD_FLOOR = START_CAPITAL + 100
 
 # START_DATE = "2020-03-29"
 # END_DATE = "2021-06-18"
@@ -21,7 +21,7 @@ START_DATE = None
 END_DATE = None
 
 MAX_ACCOUNTS = 20
-START_THRESHOLD = -500  # trigger to start next account
+START_THRESHOLD = -1000  # trigger to start next account
 RECOVERY_LEVEL = -0   # require DD to recover above this before next account can start
 MIN_DAYS_BETWEEN_STARTS = 30  # minimum days between starting new accounts
 
@@ -113,12 +113,21 @@ def simulate_staggered_accounts(pl_series, start_capital, max_accounts):
         today_equities = []
         for acc in accounts:
             if acc['alive'] and i_date >= acc['start_idx']:
-
                 acc['equity'] += pl_series.iloc[i_date]
+                # Update rolling peak
                 acc['rolling_max'] = max(acc['rolling_max'], acc['equity'])
+                # Compute drawdown
                 acc['drawdown'] = acc['equity'] - acc['rolling_max']
+                # --- Trailing DD shifts to fixed floor once threshold reached ---
+                if acc['rolling_max'] < DD_FREEZE_TRIGGER:
+                    # Trailing mode (normal)
+                    dd_floor = acc['rolling_max'] - TRAILING_DD_LIMIT
+                else:
+                    # Fixed mode (freeze)
+                    dd_floor = FROZEN_DD_FLOOR
 
-                if acc['equity'] <= acc['rolling_max'] - TRAILING_DD_LIMIT:
+                # Check if account violates DD rule
+                if acc['equity'] <= dd_floor:
                     acc['alive'] = False
 
             today_equities.append(acc['equity'] if acc['start_idx'] <= i_date else np.nan)
@@ -221,4 +230,7 @@ plt.ylabel("Drawdown")
 plt.grid(True)
 plt.tight_layout()
 
-plt.show()
+try:
+    plt.show()
+except KeyboardInterrupt:
+    print("Script stopped by user.")
