@@ -11,6 +11,9 @@ pd.set_option('display.max_rows', 2000)         # Show max 100 rows when printin
 CSV_PATH = "CSVS/premarket_only.csv"
 # CSV_PATH = "CSVS/all_times_14_flat.csv"
 START_CAPITAL = 1500
+TRAILING_DD_LIMIT = 1500  # account is closed if DD exceeds this value
+DD_FREEZE_TRIGGER = START_CAPITAL + TRAILING_DD_LIMIT + 100   # 3100
+FROZEN_DD_FLOOR = START_CAPITAL + 100                        # 1600
 
 # START_DATE = "2020-03-29"
 # END_DATE = "2021-06-18"
@@ -18,7 +21,7 @@ START_DATE = None
 END_DATE = None
 
 MAX_ACCOUNTS = 20
-START_THRESHOLD = -1000  # trigger to start next account
+START_THRESHOLD = -500  # trigger to start next account
 RECOVERY_LEVEL = -0   # require DD to recover above this before next account can start
 MIN_DAYS_BETWEEN_STARTS = 30  # minimum days between starting new accounts
 
@@ -105,6 +108,7 @@ def simulate_staggered_accounts(pl_series, start_capital, max_accounts):
     account_equities_over_time = []
 
     for i_date, date in enumerate(dates):
+
         # ----- UPDATE EXISTING ACCOUNTS -----
         today_equities = []
         for acc in accounts:
@@ -114,7 +118,7 @@ def simulate_staggered_accounts(pl_series, start_capital, max_accounts):
                 acc['rolling_max'] = max(acc['rolling_max'], acc['equity'])
                 acc['drawdown'] = acc['equity'] - acc['rolling_max']
 
-                if acc['equity'] <= 0:
+                if acc['equity'] <= acc['rolling_max'] - TRAILING_DD_LIMIT:
                     acc['alive'] = False
 
             today_equities.append(acc['equity'] if acc['start_idx'] <= i_date else np.nan)
