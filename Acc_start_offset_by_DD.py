@@ -136,33 +136,34 @@ def simulate_staggered_accounts(pl_series, start_capital, max_accounts):
 
         if len(accounts) < max_accounts:
 
-            # ---- 1) Always start first account immediately ----
-            if len(accounts) == 0:
-                can_start = True
+            # Build drawdown list from *alive* accounts only
+            active_dds = [acc['drawdown'] for acc in accounts
+                          if acc['alive'] and acc['start_idx'] <= i_date]
+
+            # If no alive accounts exist, treat drawdown as zero
+            if len(active_dds) == 0:
+                current_dd = 0
+            else:
+                current_dd = min(active_dds)
+
+            # ---- Start logic ----
+            if waiting_for_recovery:
+                can_start = False
+
+                # enough recovery?
+                if current_dd >= RECOVERY_LEVEL:
+                    waiting_for_recovery = False
 
             else:
-                # Check system-wide max drawdown among active accounts
-                current_dd = min(acc['drawdown'] for acc in accounts if acc['start_idx'] <= i_date)
-
-                # (A) If we are still waiting for recovery → do nothing
-                if waiting_for_recovery:
+                # trigger?
+                if current_dd <= START_THRESHOLD:
+                    can_start = True
+                    waiting_for_recovery = True
+                else:
                     can_start = False
 
-                    # Check if we have recovered enough
-                    if current_dd >= RECOVERY_LEVEL:
-                        waiting_for_recovery = False
-
-                # (B) If not waiting for recovery → check threshold trigger
-                else:
-                    if current_dd <= START_THRESHOLD:
-                        can_start = True
-                        waiting_for_recovery = True
-                    else:
-                        can_start = False
-
-            # ---- 2) Time-based guard ----
+            # ---- Time-based guard ----
             if can_start and (i_date - last_start_day) >= MIN_DAYS_BETWEEN_STARTS:
-
                 new_acc = {
                     'start_idx': i_date,
                     'equity': start_capital,
