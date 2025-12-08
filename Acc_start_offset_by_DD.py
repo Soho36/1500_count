@@ -8,8 +8,8 @@ import numpy as np
 pd.set_option('display.min_rows', 1000)         # Show min 1000 rows when printing
 pd.set_option('display.max_rows', 2000)         # Show max 100 rows when printing
 
-# CSV_PATH = "CSVS/premarket_only.csv"
-CSV_PATH = "CSVS/all_times_14_flat.csv"
+CSV_PATH = "CSVS/premarket_only.csv"
+# CSV_PATH = "CSVS/all_times_14_flat.csv"
 START_CAPITAL = 1500
 TRAILING_DD_LIMIT = 1500  # account is closed if DD exceeds this value
 DD_FREEZE_TRIGGER = START_CAPITAL + TRAILING_DD_LIMIT + 100
@@ -21,7 +21,9 @@ START_DATE = None
 END_DATE = None
 
 MAX_ACCOUNTS = 20
-START_THRESHOLD = -1000  # trigger to start next account
+START_IF_DD_THRESHOLD = -5000  # trigger to start next account
+START_IF_PROFIT_THRESHOLD = 1500    # alternative profit trigger to start next account
+
 RECOVERY_LEVEL = -0   # require DD to recover above this before next account can start
 MIN_DAYS_BETWEEN_STARTS = 30  # minimum days between starting new accounts
 
@@ -149,6 +151,9 @@ def simulate_staggered_accounts(pl_series, start_capital, max_accounts):
 
         if len(accounts) < max_accounts:
 
+            # Profit since last start
+            profit_since_last_start = portfolio_equity[i_date] - portfolio_equity[last_start_day]
+
             # Build drawdown list from *alive* accounts only
             active_dds = [acc['drawdown'] for acc in accounts
                           if acc['alive'] and acc['start_idx'] <= i_date]
@@ -159,7 +164,7 @@ def simulate_staggered_accounts(pl_series, start_capital, max_accounts):
             else:
                 current_dd = min(active_dds)
 
-            # ---- Start logic ----
+            # ===== START LOGIC =====
             if waiting_for_recovery:
                 can_start = False
 
@@ -169,7 +174,7 @@ def simulate_staggered_accounts(pl_series, start_capital, max_accounts):
 
             else:
                 # trigger?
-                if current_dd <= START_THRESHOLD:
+                if current_dd <= START_IF_DD_THRESHOLD or profit_since_last_start >= START_IF_PROFIT_THRESHOLD:
                     can_start = True
                     waiting_for_recovery = True
                 else:
