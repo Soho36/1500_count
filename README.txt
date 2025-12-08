@@ -1,1 +1,0 @@
-Start new accounts when certain profit is reached
