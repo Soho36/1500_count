@@ -7,26 +7,29 @@ import numpy as np
 # ========================================================================================
 pd.set_option('display.min_rows', 1000)         # Show min 1000 rows when printing
 pd.set_option('display.max_rows', 2000)         # Show max 100 rows when printing
+pd.set_option('display.max_columns', 10)       # Show max 50 columns when printing
 
 # CSV_PATH = "CSVS/premarket_only.csv"
 CSV_PATH = "CSVS/all_times_14_flat.csv"
 START_CAPITAL = 1500
-TRAILING_DD_LIMIT = 1500  # account is closed if DD exceeds this value
+
+# --- Drawdown settings ---
+TRAILING_DD_LIMIT = 5000  # account is closed if DD exceeds this value
 DD_FREEZE_TRIGGER = START_CAPITAL + TRAILING_DD_LIMIT + 100
 FROZEN_DD_FLOOR = START_CAPITAL + 100
 
-# START_DATE = "2020-05-01"
+# --- Date range filter (set to None to disable) ---
+# START_DATE = "2020-09-01"
 # END_DATE = "2021-06-18"
 START_DATE = None
 END_DATE = None
 
-MAX_ACCOUNTS = 20
 # --- New account start triggers ---
-USE_DD_TRIGGER = True
-USE_PROFIT_TRIGGER = True
-START_IF_DD_THRESHOLD = -2000  # trigger to start next account
-START_IF_PROFIT_THRESHOLD = 1500    # alternative profit trigger to start next account
-RECOVERY_LEVEL = -0   # require DD to recover above this before next account can start
+MAX_ACCOUNTS = 20
+START_IF_DD_THRESHOLD = -1500  # VALUE MUST BE NEGATIVE
+START_IF_PROFIT_THRESHOLD = None    # alternative profit trigger to start next account
+
+RECOVERY_LEVEL = 0   # require DD to recover above this before next account can start
 MIN_DAYS_BETWEEN_STARTS = 30  # minimum days between starting new accounts
 
 SHOW_PORTFOLIO_TOTAL_EQUITY = False     # if True, show total equity of all accounts combined
@@ -103,7 +106,7 @@ def simulate_staggered_accounts(pl_series, start_capital, max_accounts):
         'alive': True
     })
 
-    next_threshold_idx = 0
+    # next_threshold_idx = 0
     last_start_day = 0
     waiting_for_recovery = False
 
@@ -132,6 +135,10 @@ def simulate_staggered_accounts(pl_series, start_capital, max_accounts):
 
                 # Check if account violates DD rule
                 if acc['equity'] <= dd_floor:
+                    acc['alive'] = False
+
+                # Account cannot go below zero
+                if acc['equity'] <= 0:
                     acc['alive'] = False
 
             today_equities.append(acc['equity'] if acc['start_idx'] <= i_date else np.nan)
@@ -172,24 +179,29 @@ def simulate_staggered_accounts(pl_series, start_capital, max_accounts):
                 trigger_profit = False
 
                 # --- DD TRIGGER ---
-                if USE_DD_TRIGGER:
+                if START_IF_DD_THRESHOLD is not None:
                     if current_dd <= START_IF_DD_THRESHOLD:
                         trigger_dd = True
 
                 # --- PROFIT TRIGGER (per-account profit) ---
-                if USE_PROFIT_TRIGGER:
-                    if len(accounts) > 0:
-                        last_acc = accounts[-1]
-                        acc_profit_since_start = (
-                                last_acc['equity'] - start_capital
-                        )
+                if START_IF_PROFIT_THRESHOLD is not None:
+
+                    # find last alive account
+                    alive_accounts = [acc for acc in accounts if acc['alive']]
+
+                    if alive_accounts:
+                        last_alive = alive_accounts[-1]
+                        acc_profit_since_start = last_alive['equity'] - start_capital
+
                         if acc_profit_since_start >= START_IF_PROFIT_THRESHOLD:
                             trigger_profit = True
+                    else:
+                        # if all accounts are blown, allow a new start immediately
+                        trigger_profit = True
 
                 # Combined logic
                 if trigger_dd or trigger_profit:
                     can_start = True
-                    waiting_for_recovery = True
                 else:
                     can_start = False
 
@@ -204,7 +216,8 @@ def simulate_staggered_accounts(pl_series, start_capital, max_accounts):
                 }
                 accounts.append(new_acc)
                 last_start_day = i_date
-                next_threshold_idx += 1
+                waiting_for_recovery = True   # require recovery before next start
+                # next_threshold_idx += 1
 
     # Convert to pandas
     portfolio_eq_series = pd.Series(portfolio_equity, index=dates)
@@ -218,9 +231,24 @@ portfolio_eq, acc_eq_df, num_alive = simulate_staggered_accounts(pl, START_CAPIT
 
 print(f"Acc equity diff{acc_eq_df}")
 
-# plot portfolio and per-account equities
-plt.figure(figsize=(14, 6))
 
+# ======================
+#  DRAWDOWN PLOT
+# ======================
+dd_series = compute_drawdown_series(equity_original)
+
+plt.figure(figsize=(14, 5))
+plt.fill_between(dd_series.index, dd_series.values, 0, step="mid", color="blue")
+plt.title("Drawdown Curve")
+plt.ylabel("Drawdown")
+plt.grid(True)
+plt.tight_layout()
+
+# ======================
+#  EQUITY PLOT
+# ======================
+
+plt.figure(figsize=(14, 6))
 if SHOW_PORTFOLIO_TOTAL_EQUITY:
     plt.plot(portfolio_eq.index, portfolio_eq.values, label="Portfolio total equity", linewidth=4)
 for c in acc_eq_df.columns:
@@ -234,18 +262,6 @@ plt.grid(True)
 print("Final portfolio equity:", portfolio_eq.iloc[-1])
 print("Num accounts started:", acc_eq_df.notna().any().sum())
 print("Number of accounts still alive at end:", num_alive.iloc[-1])
-
-# ======================
-#  DRAWDOWN PLOT
-# ======================
-dd_series = compute_drawdown_series(equity_original)
-
-plt.figure(figsize=(14, 5))
-plt.fill_between(dd_series.index, dd_series.values, 0, step="mid", color="blue")
-plt.title("Drawdown Curve")
-plt.ylabel("Drawdown")
-plt.grid(True)
-plt.tight_layout()
 
 try:
     plt.show()
