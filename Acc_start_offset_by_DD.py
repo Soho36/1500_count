@@ -14,8 +14,8 @@ CSV_PATH = "CSVS/all_times_14_flat.csv"
 START_CAPITAL = 1500
 
 # --- Drawdown settings ---
-TRAILING_DD_LIMIT = 5000  # account is closed if DD exceeds this value
-DD_FREEZE_TRIGGER = START_CAPITAL + TRAILING_DD_LIMIT + 100
+TRAILING_DD = 1500  # account is closed if DD exceeds this value
+DD_FREEZE_TRIGGER = START_CAPITAL + TRAILING_DD + 100
 FROZEN_DD_FLOOR = START_CAPITAL + 100
 
 # --- Date range filter (set to None to disable) ---
@@ -26,10 +26,10 @@ END_DATE = None
 
 # --- New account start triggers ---
 MAX_ACCOUNTS = 20
-START_IF_DD_THRESHOLD = -1500  # VALUE MUST BE NEGATIVE
-START_IF_PROFIT_THRESHOLD = None    # alternative profit trigger to start next account
+START_IF_DD_THRESHOLD = 1500  # DD trigger to start next account
+START_IF_PROFIT_THRESHOLD = None    # Profit trigger to start next account
 
-RECOVERY_LEVEL = 0   # require DD to recover above this before next account can start
+RECOVERY_LEVEL = 0   # require DD to recover above this value before next account can start
 MIN_DAYS_BETWEEN_STARTS = 30  # minimum days between starting new accounts
 
 SHOW_PORTFOLIO_TOTAL_EQUITY = False     # if True, show total equity of all accounts combined
@@ -128,7 +128,7 @@ def simulate_staggered_accounts(pl_series, start_capital, max_accounts):
                 # --- Trailing DD shifts to fixed floor once threshold reached ---
                 if acc['rolling_max'] < DD_FREEZE_TRIGGER:
                     # Trailing mode (normal)
-                    dd_floor = acc['rolling_max'] - TRAILING_DD_LIMIT
+                    dd_floor = acc['rolling_max'] - TRAILING_DD
                 else:
                     # Fixed mode (freeze)
                     dd_floor = FROZEN_DD_FLOOR
@@ -180,7 +180,7 @@ def simulate_staggered_accounts(pl_series, start_capital, max_accounts):
 
                 # --- DD TRIGGER ---
                 if START_IF_DD_THRESHOLD is not None:
-                    if current_dd <= START_IF_DD_THRESHOLD:
+                    if current_dd <= -1 * START_IF_DD_THRESHOLD:
                         trigger_dd = True
 
                 # --- PROFIT TRIGGER (per-account profit) ---
