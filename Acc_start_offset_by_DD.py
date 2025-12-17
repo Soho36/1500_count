@@ -9,7 +9,8 @@ pd.set_option('display.min_rows', 1000)         # Show min 1000 rows when printi
 pd.set_option('display.max_rows', 2000)         # Show max 100 rows when printing
 pd.set_option('display.max_columns', 10)       # Show max 50 columns when printing
 
-CSV_PATH = "CSVS/premarket_only.csv"
+CSV_PATH = "CSVS/all_times_14_flat_ONLY_PNL.csv"
+# CSV_PATH = "CSVS/premarket_only.csv"
 # CSV_PATH = "CSVS/all_times_14_flat.csv"
 START_CAPITAL = 1500
 

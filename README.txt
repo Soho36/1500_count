@@ -1,1 +1,2 @@
-if account blows, when new one should start? currently seems like new account starts by MIN_DAYS_BETWEEN_STARTS
+In order to make results more accurate, we can calculate average difference between daily
+high and low and intraday.
