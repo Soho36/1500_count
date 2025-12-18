@@ -1,7 +1,8 @@
 import pandas as pd
 import matplotlib.pyplot as plt
 
-df = pd.read_csv("daily_results.csv", sep="\t")
+input_file_path = "../MAE/daily_results.csv"  # input file from MAE/MT5_trade_stats_to_daily_MAE.py
+df = pd.read_csv(input_file_path, sep="\t")
 df["Date"] = pd.to_datetime(df["Date"], dayfirst=True)
 
 # cumulative equity
