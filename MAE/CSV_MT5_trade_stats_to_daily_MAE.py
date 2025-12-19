@@ -4,7 +4,7 @@ import pandas as pd
 #  LOAD & CLEAN DATA
 # ======================
 try:
-    input_path = "../MAE/trade_stats.csv"  # input file from MT5 strategy tester
+    input_path = "trade_stats_1_minute.csv"  # input file from MT5 strategy tester
     df = pd.read_csv(input_path, sep="\t")
 
     for col in ["MAE", "MFE", "PNL"]:
@@ -22,7 +22,7 @@ try:
 
     df = df[["Entry_time", "Exit_time", "MAE", "MFE", "PNL"]].dropna()
 except FileNotFoundError:
-    print("Input file not found. Please ensure 'MAE/trade_stats.csv' exists.")
+    print("Input file not found. Please ensure 'MAE/trade_stats_1_minute.csv' exists.")
     exit()
 
 df["Date"] = df["Entry_time"].dt.date
@@ -75,10 +75,10 @@ for _, r in daily.iterrows():
     equity_peak = max(equity_peak, equity_close + r["MFE"])
 
     # worst floating equity today
-    equity_trough = equity_close + r["MAE"]
+    equity_low = equity_close + r["MAE"]
 
     # trailing DD (prop logic)
-    trailing_dd = equity_trough - equity_peak
+    trailing_dd = equity_low - equity_peak
     worst_dd = min(worst_dd, trailing_dd)
 
     # close day
@@ -86,12 +86,12 @@ for _, r in daily.iterrows():
 
     prop_rows.append({
         "Date": r["Date"].strftime("%d.%m.%Y"),
-        "Daily_PNL": r["PNL"],
-        "Daily_MAE": r["MAE"],
-        "Daily_MFE": r["MFE"],
+        "PNL": r["PNL"],
+        "MAE": r["MAE"],
+        "MFE": r["MFE"],
         "Equity_Close": round(equity_close, 2),
         "Equity_Peak": round(equity_peak, 2),
-        "Equity_Trough": round(equity_trough, 2),
+        "Equity_Low": round(equity_low, 2),
         "Trailing_DD": round(trailing_dd, 2),
         "Worst_DD_So_Far": round(worst_dd, 2),
     })
@@ -103,13 +103,13 @@ prop_df = pd.DataFrame(prop_rows)
 # SAVE OUTPUTS
 # ======================
 
-daily_output = "../MAE/daily_results.csv"
-prop_output = "../MAE/prop_trailing_dd.csv"
+daily_output_mae = "../MAE/daily_results_mae.csv"
+daily_output_mae_equity_peak_low = "../MAE/daily_results_mae_eq_peak_low.csv"
 
 daily.assign(Date=daily["Date"].apply(lambda d: d.strftime("%d.%m.%Y"))) \
-     .to_csv(daily_output, index=False, sep="\t", encoding="utf-8")
+     .to_csv(daily_output_mae, index=False, sep="\t", encoding="utf-8")
 
-prop_df.to_csv(prop_output, index=False, sep="\t", encoding="utf-8")
+prop_df.to_csv(daily_output_mae_equity_peak_low, index=False, sep="\t", encoding="utf-8")
 
-print(f"Daily MAE/MFE saved to: {daily_output}")
-print(f"Prop trailing DD saved to: {prop_output}")
+print(f"Daily MAE/MFE saved to: {daily_output_mae}")
+print(f"Prop trailing DD saved to: {daily_output_mae_equity_peak_low}")
