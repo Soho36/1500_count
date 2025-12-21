@@ -1,11 +1,15 @@
 import pandas as pd
 import matplotlib.pyplot as plt
+from datetime import time
+
+# Display number of rows in DataFrame outputs
+pd.set_option('display.max_rows', 500)
 
 # ======================
 #  LOAD & CLEAN DATA
 # ======================
 try:
-    input_path = "trade_stats_1_minute.csv"  # input file from MT5 strategy tester
+    input_path = "../CSVS/time_shifted_trade_stats_1_minute.csv"  # input file from MT5 strategy tester
     df = pd.read_csv(input_path, sep="\t")
 
     for col in ["MAE", "MFE", "PNL"]:
@@ -26,7 +30,22 @@ except FileNotFoundError:
     print("Input file not found. Please ensure 'MAE/trade_stats_1_minute.csv' exists.")
     exit()
 
+# ======================
 df["Date"] = df["Entry_time"].dt.date
+
+# extract time
+df["Entry_clock"] = df["Entry_time"].dt.time
+
+# Filter to pre-market trades only (1:00 - 10:00)
+PREMARKET_START = time(1, 0)
+PREMARKET_END = time(10, 0)
+
+df = df[
+    (df["Entry_clock"] >= PREMARKET_START) &
+    (df["Entry_clock"] < PREMARKET_END)
+].copy()
+
+print(f"Filtered by time DF: {df}")
 
 # ======================
 # MAE / MFE LOGIC
@@ -124,6 +143,10 @@ daily = dd_curve.groupby("Date").agg(
     MFE=("equity", "max")
 ).reset_index()
 
+#   MAX DD STATISTICS
+print("Max closed DD:", plot_df["DD_Closed"].min())
+print("Max floating DD:", plot_df["DD_Floating"].min())
+print("Final PNL:", plot_df["Equity"].iloc[-1])
 
 # ======================
 # SAVE OUTPUTS
@@ -182,4 +205,7 @@ axes[2].grid(True)
 axes[2].legend()
 
 plt.tight_layout()
-plt.show()
+try:
+    plt.show()
+except KeyboardInterrupt as e:
+    print(f"Script stopped by user: {e}")
