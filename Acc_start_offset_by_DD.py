@@ -19,8 +19,8 @@ TRAILING_DD = 1500  # account is closed if DD exceeds this value
 DD_FREEZE_TRIGGER = START_CAPITAL + TRAILING_DD + 100
 FROZEN_DD_FLOOR = START_CAPITAL + 100
 # --- DD stabilization ---
-DD_LOOKBACK = 20          # days to check for new lows
-REQUIRE_DD_STABLE = True
+DD_LOOKBACK = 10          # days to check for new lows
+REQUIRE_DD_STABLE = False
 
 
 # --- Date range filter (set to None to disable) ---
@@ -30,7 +30,7 @@ START_DATE = None
 END_DATE = None
 
 # --- New account start triggers ---
-MAX_ACCOUNTS = 20
+MAX_ACCOUNTS = 40
 START_IF_DD_THRESHOLD = 800  # DD trigger to start next account
 START_IF_PROFIT_THRESHOLD = 50000    # Profit trigger to start next account (set too high to disable)
 
@@ -68,6 +68,13 @@ def compute_drawdown_series(equity):
     dd_series = equity - rolling_max
     return dd_series
 
+
+if REQUIRE_DD_STABLE:
+    print(f"\nREQUIRE_DD_STABLE: {REQUIRE_DD_STABLE}")
+    print(f"DD_LOOKBACK: {DD_LOOKBACK} days\n")
+else:
+    print(f"\nREQUIRE_DD_STABLE: {REQUIRE_DD_STABLE} (disabled)")
+    print(f"DD_LOOKBACK: {DD_LOOKBACK} days (disabled)\n")
 
 # ======================
 #  LOAD & CLEAN DATA
