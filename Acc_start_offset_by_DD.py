@@ -20,7 +20,7 @@ DD_FREEZE_TRIGGER = START_CAPITAL + TRAILING_DD + 100
 FROZEN_DD_FLOOR = START_CAPITAL + 100
 # --- DD stabilization ---
 DD_LOOKBACK = 10          # days to check for new lows
-REQUIRE_DD_STABLE = False
+REQUIRE_DD_STABLE = False   # require DD to not make new lows in lookback period before starting new account
 
 
 # --- Date range filter (set to None to disable) ---
@@ -31,7 +31,7 @@ END_DATE = None
 
 # --- New account start triggers ---
 MAX_ACCOUNTS = 40
-START_IF_DD_THRESHOLD = 800  # DD trigger to start next account
+START_IF_DD_THRESHOLD = 1500  # DD trigger to start next account
 START_IF_PROFIT_THRESHOLD = 50000    # Profit trigger to start next account (set too high to disable)
 
 RECOVERY_LEVEL = 0   # require DD to recover above this value before next account can start
@@ -69,12 +69,39 @@ def compute_drawdown_series(equity):
     return dd_series
 
 
-if REQUIRE_DD_STABLE:
-    print(f"\nREQUIRE_DD_STABLE: {REQUIRE_DD_STABLE}")
-    print(f"DD_LOOKBACK: {DD_LOOKBACK} days\n")
-else:
-    print(f"\nREQUIRE_DD_STABLE: {REQUIRE_DD_STABLE} (disabled)")
-    print(f"DD_LOOKBACK: {DD_LOOKBACK} days (disabled)\n")
+def print_config():
+    print("=== Configuration ===")
+    print(f"CSV_PATH: {CSV_PATH}")
+    print(f"START_CAPITAL: {START_CAPITAL}")
+    print(f"TRAILING_DD: {TRAILING_DD}")
+    print(f"DD_FREEZE_TRIGGER: {DD_FREEZE_TRIGGER}")
+    print(f"FROZEN_DD_FLOOR: {FROZEN_DD_FLOOR}")
+
+    if START_DATE is None:
+        print("START_DATE: None (no start date filter)")
+    else:
+        print(f"START_DATE: {START_DATE}")
+    if END_DATE is None:
+        print("END_DATE: None (no end date filter)")
+    else:
+        print(f"END_DATE: {END_DATE}")
+
+    print(f"MAX_ACCOUNTS: {MAX_ACCOUNTS}")
+    print(f"START_IF_DD_THRESHOLD: {START_IF_DD_THRESHOLD}")
+    print(f"START_IF_PROFIT_THRESHOLD: {START_IF_PROFIT_THRESHOLD}")
+    print(f"RECOVERY_LEVEL: {RECOVERY_LEVEL}")
+    print(f"MIN_DAYS_BETWEEN_STARTS: {MIN_DAYS_BETWEEN_STARTS}")
+    print(f"SHOW_PORTFOLIO_TOTAL_EQUITY: {SHOW_PORTFOLIO_TOTAL_EQUITY}")
+    print("=====================")
+    if REQUIRE_DD_STABLE:
+        print(f"\nREQUIRE_DD_STABLE: {REQUIRE_DD_STABLE}")
+        print(f"DD_LOOKBACK: {DD_LOOKBACK} days\n")
+    else:
+        print(f"\nREQUIRE_DD_STABLE: {REQUIRE_DD_STABLE} (disabled)")
+        print(f"DD_LOOKBACK: {DD_LOOKBACK} days (disabled)\n")
+
+
+print_config()
 
 # ======================
 #  LOAD & CLEAN DATA
@@ -160,7 +187,7 @@ def simulate_staggered_accounts(pl_series, start_capital, max_accounts):
             today_equities.append(acc['equity'] if acc['start_idx'] <= i_date else np.nan)
 
         # ----- RECORDING -----
-        total_equity = sum(a['equity'] for a in accounts)
+        total_equity = sum(a['equity'] for a in accounts if a['alive'])     # only sum alive accounts
         portfolio_equity.append(total_equity)
 
         row = [np.nan] * max_accounts
@@ -185,7 +212,7 @@ def simulate_staggered_accounts(pl_series, start_capital, max_accounts):
             global_dd_now = dd_series.iloc[i_date]
             global_dd_recent_min = dd_rolling_min.iloc[i_date - 1] if i_date > 0 else 0
 
-            dd_not_making_new_lows = global_dd_now > global_dd_recent_min
+            dd_not_making_new_lows = global_dd_now >= global_dd_recent_min
 
             # ===== START LOGIC =====
             if waiting_for_recovery:
