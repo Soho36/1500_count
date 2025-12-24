@@ -11,8 +11,8 @@ from datetime import time
 pd.set_option('display.max_rows', 500)
 
 # Filter to pre-market trades only (1:00 - 10:00)
-PREMARKET_START = time(1, 0)
-PREMARKET_END = time(10, 0)
+PREMARKET_START = time(0, 0)
+PREMARKET_END = time(23, 59)
 
 SAVE_FILES = False   # save output CSV files
 
@@ -200,7 +200,7 @@ print(f"Count DDs: {len(dur)}")
 print(f"Mean DD duration:   {dur.mean():.2f}")
 print(f"Median DD duration: {dur.median():.2f}")
 print(f"Max DD duration:    {dur.max():.0f}\n")
-for n in [5, 10, 20]:
+for n in [5, 10, 20, 30, 60, 90]:
     pct = (dur > n).mean() * 100
     print(f"% of DDs longer than {n} days: {pct:.1f}%")
 
@@ -228,8 +228,68 @@ for t in timeline:
 
 surv_df = pd.DataFrame(survival, columns=["Days", "Survival_Prob"])
 
+# =====================================================================
+# EXPECTED REMAINING DD DURATION
+# =====================================================================
+
+exp_rows = []
+
+days = surv_df["Days"].values
+S = surv_df["Survival_Prob"].values
+
+for i, t in enumerate(days):
+    if S[i] <= 0:
+        continue
+
+    # numerical integral of survival curve tail
+    remaining_area = 0.0
+    for j in range(i, len(days) - 1):
+        dt = days[j + 1] - days[j]
+        remaining_area += S[j] * dt
+
+    expected_remaining = remaining_area / S[i]
+
+    exp_rows.append({
+        "Days_In_DD": t,
+        "Expected_Remaining_Days": expected_remaining
+    })
+
+exp_df = pd.DataFrame(exp_rows)
+
+
+# =====================================================================
+# HAZARD RATE (Conditional recovery probability)
+# =====================================================================
+
+hazard_rows = []
+
+timeline = np.sort(np.unique(dur_kaplan))
+
+for t in timeline:
+    at_risk = (dur_kaplan >= t).sum()
+    recovered = ((dur_kaplan == t) & (events == 1)).sum()
+
+    if at_risk > 0:
+        hazard = recovered / at_risk
+    else:
+        hazard = np.nan
+
+    hazard_rows.append({
+        "Days": t,
+        "At_Risk": at_risk,
+        "Recovered": recovered,
+        "Hazard": hazard
+    })
+
+hazard_df = pd.DataFrame(hazard_rows)
+
+hazard_df["Support"] = hazard_df["At_Risk"]
+hazard_clean = hazard_df[hazard_df["Support"] >= 10]
+hazard_clean["Hazard_SMA"] = hazard_clean["Hazard"].rolling(5, min_periods=3).mean()
+
+
 # ============================================
-# 4) Drawdown survival curve (Kaplan-Meier survival estimation)
+# Drawdown survival curve (Kaplan-Meier survival estimation)
 # ============================================
 
 """
@@ -252,6 +312,59 @@ plt.step(surv_df["Days"], surv_df["Survival_Prob"], where="post")
 plt.xlabel("Days in Drawdown")
 plt.ylabel("P(DD not recovered)")
 plt.title("Drawdown Survival Curve")
+plt.grid(True)
+
+
+# ============================================
+# Hazard rate plot
+# ============================================
+"""
+Hazard rate at day t means:
+If a drawdown has lasted at least "t" days, what is the probability it recovers on day "t"+1?
+
+This answers:
+"Do DDs heal faster or slower as time passes?"
+
+How to interpret the hazard curve
+Case A — Hazard decreases over time
+
+Early DDs recover easily
+Long DDs are sticky
+Suggests structural tail risk
+⚠️ Dangerous for accounts
+
+Case B — Hazard flat
+Memoryless DDs
+Time doesn’t matter much
+Pure variance-driven system
+✅ Statistically clean
+
+Case C — Hazard increases
+Market eventually “fixes” DDs
+Mean reversion in time
+Rare but excellent
+🚀 Very robust strategy
+"""
+plt.figure(figsize=(10, 4))
+plt.plot(hazard_clean["Days"], hazard_clean["Hazard"], marker="o")
+plt.xlabel("Days in Drawdown")
+plt.ylabel("P(Recovery tomorrow)")
+plt.title("Drawdown Recovery Hazard Rate")
+plt.grid(True)
+
+# ============================================
+# Expected remaining DD duration plot
+# ============================================
+
+plt.figure(figsize=(10, 4))
+plt.plot(
+    exp_df["Days_In_DD"],
+    exp_df["Expected_Remaining_Days"],
+    linewidth=2
+)
+plt.xlabel("Days already in Drawdown")
+plt.ylabel("Expected remaining DD days")
+plt.title("Expected Remaining Drawdown Duration")
 plt.grid(True)
 
 

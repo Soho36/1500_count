@@ -9,8 +9,8 @@ pd.set_option('display.min_rows', 1000)         # Show min 1000 rows when printi
 pd.set_option('display.max_rows', 2000)         # Show max 100 rows when printing
 pd.set_option('display.max_columns', 10)       # Show max 50 columns when printing
 
-CSV_PATH = "CSVS/all_times_14_flat_ONLY_PNL.csv"
-# CSV_PATH = "CSVS/premarket_only.csv"
+# CSV_PATH = "CSVS/all_times_14_flat_ONLY_PNL.csv"
+CSV_PATH = "CSVS/premarket_only.csv"
 # CSV_PATH = "CSVS/all_times_14_flat.csv"
 START_CAPITAL = 1500
 
@@ -27,8 +27,8 @@ END_DATE = None
 
 # --- New account start triggers ---
 MAX_ACCOUNTS = 20
-START_IF_DD_THRESHOLD = 500  # DD trigger to start next account
-START_IF_PROFIT_THRESHOLD = 1500    # Profit trigger to start next account
+START_IF_DD_THRESHOLD = 1000  # DD trigger to start next account
+START_IF_PROFIT_THRESHOLD = 50000    # Profit trigger to start next account (set too high to disable)
 
 RECOVERY_LEVEL = 0   # require DD to recover above this value before next account can start
 MIN_DAYS_BETWEEN_STARTS = 5  # minimum days between starting new accounts
