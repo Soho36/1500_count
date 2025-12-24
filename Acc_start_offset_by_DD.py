@@ -10,14 +10,18 @@ pd.set_option('display.max_rows', 2000)         # Show max 100 rows when printin
 pd.set_option('display.max_columns', 10)       # Show max 50 columns when printing
 
 # CSV_PATH = "CSVS/all_times_14_flat_ONLY_PNL.csv"
-CSV_PATH = "CSVS/premarket_only.csv"
-# CSV_PATH = "CSVS/all_times_14_flat.csv"
+# CSV_PATH = "CSVS/premarket_only.csv"
+CSV_PATH = "CSVS/all_times_14_flat.csv"
 START_CAPITAL = 1500
 
 # --- Drawdown settings ---
 TRAILING_DD = 1500  # account is closed if DD exceeds this value
 DD_FREEZE_TRIGGER = START_CAPITAL + TRAILING_DD + 100
 FROZEN_DD_FLOOR = START_CAPITAL + 100
+# --- DD stabilization ---
+DD_LOOKBACK = 20          # days to check for new lows
+REQUIRE_DD_STABLE = True
+
 
 # --- Date range filter (set to None to disable) ---
 # START_DATE = "2020-09-01"
@@ -27,7 +31,7 @@ END_DATE = None
 
 # --- New account start triggers ---
 MAX_ACCOUNTS = 20
-START_IF_DD_THRESHOLD = 1000  # DD trigger to start next account
+START_IF_DD_THRESHOLD = 800  # DD trigger to start next account
 START_IF_PROFIT_THRESHOLD = 50000    # Profit trigger to start next account (set too high to disable)
 
 RECOVERY_LEVEL = 0   # require DD to recover above this value before next account can start
@@ -94,10 +98,14 @@ pl = df.set_index("Date")["P.L"]
 # Original equity curve
 equity_original = START_CAPITAL + pl.cumsum()
 
+dd_series = compute_drawdown_series(equity_original)
+dd_rolling_min = dd_series.rolling(DD_LOOKBACK, min_periods=1).min()
+
 
 def simulate_staggered_accounts(pl_series, start_capital, max_accounts):
     dates = pl_series.index
     accounts = []
+
     # --- START FIRST ACCOUNT RIGHT AWAY ---
     accounts.append({
         'start_idx': 0,
@@ -167,6 +175,11 @@ def simulate_staggered_accounts(pl_series, start_capital, max_accounts):
 
             current_dd = min(active_dds) if active_dds else 0
 
+            global_dd_now = dd_series.iloc[i_date]
+            global_dd_recent_min = dd_rolling_min.iloc[i_date - 1] if i_date > 0 else 0
+
+            dd_not_making_new_lows = global_dd_now > global_dd_recent_min
+
             # ===== START LOGIC =====
             if waiting_for_recovery:
                 can_start = False
@@ -202,7 +215,11 @@ def simulate_staggered_accounts(pl_series, start_capital, max_accounts):
 
                 # Combined logic
                 if trigger_dd or trigger_profit:
-                    can_start = True
+                    if REQUIRE_DD_STABLE:
+                        can_start = dd_not_making_new_lows
+                    else:
+                        can_start = True
+
                 else:
                     can_start = False
 
@@ -230,13 +247,13 @@ def simulate_staggered_accounts(pl_series, start_capital, max_accounts):
 
 portfolio_eq, acc_eq_df, num_alive = simulate_staggered_accounts(pl, START_CAPITAL, MAX_ACCOUNTS)
 
-print(f"Acc equity diff{acc_eq_df}")
+# print(f"Acc equity diff{acc_eq_df}")
 
 
 # ======================
 #  DRAWDOWN PLOT
 # ======================
-dd_series = compute_drawdown_series(equity_original)
+
 
 plt.figure(figsize=(14, 5))
 plt.fill_between(dd_series.index, dd_series.values, 0, step="mid", color="blue")
