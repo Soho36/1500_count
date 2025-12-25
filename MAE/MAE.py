@@ -33,14 +33,14 @@ if not sanity_check:
     print("NB! Logic error in MAE/MFE handling")
 
 
-# plt.figure(figsize=(11, 6))
-#
-# # equity curve
-# plt.plot(df["Date"], df["Equity"], label="Equity (closed)", linewidth=2)
+plt.figure(figsize=(11, 6))
+
+# equity curve
+plt.plot(df["Date"], df["Equity"], label="Equity (closed)", linewidth=2)
 
 # MAE / MFE dots
-# plt.scatter(df["Date"], df["Equity_MAE_dot"], label="MAE (daily worst)", marker="o")
-# plt.scatter(df["Date"], df["Equity_MFE_dot"], label="MFE (daily best)", marker="o")
+plt.scatter(df["Date"], df["Equity_MAE_dot"], label="MAE (daily worst)", marker="o")
+plt.scatter(df["Date"], df["Equity_MFE_dot"], label="MFE (daily best)", marker="o")
 
 # noinspection PyTypeChecker
 fig, axes = plt.subplots(3, 1, figsize=(12, 9), sharex=True)
