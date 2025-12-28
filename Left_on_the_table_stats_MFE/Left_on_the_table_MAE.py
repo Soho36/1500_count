@@ -1,11 +1,14 @@
 import pandas as pd
+import numpy as np
 
 # ==============================
 # CONFIG
 # ==============================
 pd.set_option('display.max_rows', None)      # Show all rows when printing DataFrames
-# path = r"C:\Users\Vova deduskin lap\AppData\Roaming\MetaQuotes\Tester\870072DB5DBAB61841BAE146AFAAFB8A\Agent-127.0.0.1-3000\MQL5\Files\trade_stats.csv"
-path = r"C:\Users\Vova deduskin lap\AppData\Roaming\MetaQuotes\Tester\870072DB5DBAB61841BAE146AFAAFB8A\Agent-127.0.0.1-3000\MQL5\Files\noposmae.csv"
+path = (r"C:\Users\Vova deduskin lap\AppData\Roaming\MetaQuotes\Tester\870072DB5DBAB61841BAE146AFAAFB8A"
+        r"\Agent-127.0.0.1-3000\MQL5\Files\trade_stats.csv")
+# path = (r"C:\Users\Vova deduskin lap\AppData\Roaming\MetaQuotes\Tester\870072DB5DBAB61841BAE146AFAAFB8A"
+#         r"\Agent-127.0.0.1-3000\MQL5\Files\noposmae.csv")
 
 print("\n📥 Reading CSV file...")
 df = pd.read_csv(path, sep="\t", encoding="utf-8")
@@ -17,11 +20,15 @@ print(f"✅ Loaded {len(df)} trades")
 print("\n📐 Computing risk and excursion metrics...")
 
 # Risk in price units
-df["R"] = df["MAE"].abs()
+df["R"] = df["Stop_money"]
+assert (df["R"] > 0).all(), "All R values must be positive"
 
-# Raw and normalized leftover
-df["Left_raw"] = df["MFE"] - df["PNL"]
-df["Left_R"] = df["Left_raw"] / df["R"]
+# Normalized metrics
+df["MAE_R"] = df["MAE"].abs() / df["R"]
+df["Unrealized_R"] = df["MFE"] / df["R"]
+df["Left_R"] = np.nan
+mask = df["PNL"] > 0
+df.loc[mask, "Left_R"] = (df.loc[mask, "MFE"] - df.loc[mask, "PNL"]) / df.loc[mask, "R"]
 
 # ==============================
 # FEASIBLE TRADES (≥ 1R reached)
@@ -32,30 +39,30 @@ print("\n📊 BASIC SUMMARY (only trades reaching ≥1R)")
 
 summary = {
     "Total trades": f"{len(df)} - Total trades in the dataset",
-    "Trades reaching ≥1R": f"{len(df_feasible)} - How many ever reached ≥1R (MFE ≥ |MAE|)",
-    "Median Left_R": f"{df_feasible['Left_R'].median():.4f} - For 50% of feasible trades, left X on the table",
-    "75th percentile Left_R": f"{df_feasible['Left_R'].quantile(0.75):.4f} - For 75% of feasible trades, left X on the table",
+    "Trades reaching ≥1R": f"{len(df_feasible)} - How many ever reached ≥1R (MFE ≥ stop distance)",
+    "Median Left_R": f"{df_feasible['Left_R'].median():.4f} - For 50% of winning trades that reached ≥1R, this R was left on the table",
+    "75th percentile Left_R": f"{df_feasible['Left_R'].quantile(0.75):.4f} - For 75% of winning trades that reached ≥1R, this R was left on the table",
     "Mean Left_R (diagnostic)": f"{df_feasible['Left_R'].mean():.4f}",
 }
 
 for k, v in summary.items():
     print(f"{k:30s}: {v}")
 
-sample_feasible = df_feasible[["MAE", "MFE", "PNL", "Left_R"]].sample(20, random_state=42)
+sample_feasible = df_feasible[["Stop_money", "MAE", "MFE", "PNL", "Left_R"]].sample(20, random_state=42)
 print(f"\nFeasible sample of trades:\n {sample_feasible}")
 # ==============================
 # RISK SIZE BUCKET ANALYSIS
 # ==============================
-print("\n📦 Left_R by absolute MAE size (price buckets)")
+print("\n📦 Left_R by stop size (price buckets). 0-10$, 10-2$, 20-40$, etc.")
 
-df_feasible["MAE_price_bucket"] = pd.cut(
+df_feasible["Stop_size_bucket"] = pd.cut(
     df_feasible["R"],
     bins=[0, 10, 20, 40, 80, 200]
 )
 
 print(
     df_feasible
-    .groupby("MAE_price_bucket")["Left_R"]
+    .groupby("Stop_size_bucket")["Left_R"]
     .median()
 )
 
@@ -69,10 +76,9 @@ print("\n🔍 CONDITIONAL ANALYSIS (only trades with Left_R > 0)")
 
 conditional = {
     "Count": f"{len(left)} -  How many trades reached ≥1R (MFE ≥ R) and left profit on the table",
-    "Median MAE in R": f"{(left['MAE'].abs() / left['R']).median()} - For trades where you could have made more, price first went almost fully to your stop",
+    "Median MAE in R": f"{(left['MAE'].abs() / left['R']).median()}",
     "Median Left_R": f"{left['Left_R'].median()}",
     "75th percentile Left_R": f"{left['Left_R'].quantile(0.75)}",
-    "Mean Left_R": f"{left['Left_R'].mean()}",
 }
 
 for k, v in conditional.items():
@@ -81,9 +87,6 @@ for k, v in conditional.items():
 # ==============================
 # MAE IN R BUCKETS
 # ==============================
-print("\n📉 Left_R by MAE severity (normalized MAE buckets) - \n"
-      "If Zeroes - there are no trades where: MAE was small and profit was left on the table\n"
-      "When MAE < 0.75R → you already extract what’s available:")
 
 df_feasible["MAE_R_bin"] = pd.cut(
     df_feasible["MAE"].abs() / df_feasible["R"],
@@ -103,7 +106,7 @@ print("\n🧪 Random sample of trades where profit was left:")
 
 left["Close_R"] = left["PNL"] / left["R"]
 
-sample = left[["MAE", "MFE", "PNL", "Close_R", "Left_R"]].sample(20, random_state=42)
+sample = left[["Stop_money", "MAE", "MFE", "PNL", "Close_R", "Left_R"]].sample(20, random_state=42)
 print(sample)
 
 print("\n✅ Analysis complete.")
@@ -133,7 +136,7 @@ conditional_df = pd.DataFrame(
 # MAE price bucket table
 mae_price_table = (
     df_feasible
-    .groupby("MAE_price_bucket")["Left_R"]
+    .groupby("Stop_size_bucket")["Left_R"]
     .median()
     .reset_index()
     .rename(columns={"Left_R": "Median_Left_R"})
@@ -150,13 +153,20 @@ mae_r_table = (
 
 # All feasible trades
 feasible_trades = df_feasible[
-    ["Trade_entry", "Trade_exit", "MAE", "MFE", "PNL", "R", "Left_R"]
+    ["Entry_time", "Exit_time", "MAE", "MFE", "PNL", "R", "Left_R"]
 ].copy()
 
 # Feasible trades where profit was left
 feasible_left_trades = left[
-    ["Trade_entry", "Trade_exit", "MAE", "MFE", "PNL", "R", "Close_R", "Left_R"]
+    ["Entry_time", "Exit_time", "MAE", "MFE", "PNL", "R", "Close_R", "Left_R"]
 ].copy()
+
+stress_trades = df[
+    (df["MFE"] >= df["R"]) &
+    (df["PNL"] > 0) &
+    (df["MAE_R"] >= 0.75) & (df["MAE_R"] <= 1.05)
+]
+
 
 print("\n🏁 All done!")
 
@@ -171,9 +181,10 @@ print(f"\n📤 Exporting results to Excel: {output_path}")
 with pd.ExcelWriter(output_path, engine="xlsxwriter") as writer:
     summary_df.to_excel(writer, sheet_name="Summary", index=False)
     conditional_df.to_excel(writer, sheet_name="Conditional", index=False)
-    mae_price_table.to_excel(writer, sheet_name="MAE_price_buckets", index=False)
+    mae_price_table.to_excel(writer, sheet_name="Stop_size_bucket", index=False)
     mae_r_table.to_excel(writer, sheet_name="MAE_R_buckets", index=False)
     feasible_left_trades.to_excel(writer, sheet_name="Feasible_Left", index=False)
     feasible_trades.to_excel(writer, sheet_name="Feasible_All", index=False)
+    stress_trades.to_excel(writer, sheet_name="High_MAE_Stress_Trades", index=False)
 
 print("✅ Excel export completed.")
