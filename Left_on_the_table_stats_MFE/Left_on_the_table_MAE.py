@@ -5,10 +5,10 @@ import numpy as np
 # CONFIG
 # ==============================
 pd.set_option('display.max_rows', None)      # Show all rows when printing DataFrames
-path = (r"C:\Users\Vova deduskin lap\AppData\Roaming\MetaQuotes\Tester\870072DB5DBAB61841BAE146AFAAFB8A"
-        r"\Agent-127.0.0.1-3000\MQL5\Files\trade_stats.csv")
 # path = (r"C:\Users\Vova deduskin lap\AppData\Roaming\MetaQuotes\Tester\870072DB5DBAB61841BAE146AFAAFB8A"
-#         r"\Agent-127.0.0.1-3000\MQL5\Files\noposmae.csv")
+#         r"\Agent-127.0.0.1-3000\MQL5\Files\trade_stats.csv")
+path = (r"C:\Users\Liikurserv\AppData\Roaming\MetaQuotes\Tester\F5855995045EF8A4C3CA7AE968872CF2"
+        r"\Agent-127.0.0.1-3000\MQL5\Files\trade_stats.csv")
 
 print("\n📥 Reading CSV file...")
 df = pd.read_csv(path, sep="\t", encoding="utf-8")
@@ -40,8 +40,8 @@ print("\n📊 BASIC SUMMARY (only trades reaching ≥1R)")
 summary = {
     "Total trades": f"{len(df)} - Total trades in the dataset",
     "Trades reaching ≥1R": f"{len(df_feasible)} - How many ever reached ≥1R (MFE ≥ stop distance)",
-    "Median Left_R": f"{df_feasible['Left_R'].median():.4f} - For 50% of winning trades that reached ≥1R, this R was left on the table",
-    "75th percentile Left_R": f"{df_feasible['Left_R'].quantile(0.75):.4f} - For 75% of winning trades that reached ≥1R, this R was left on the table",
+    "Median Left_R": f"{df_feasible['Left_R'].median():.4f} - For 50% of winning trades that reached ≥1R, the maximum unrealized profit was this much left on the table",
+    "75th percentile Left_R": f"{df_feasible['Left_R'].quantile(0.75):.4f} - For 75% of winning trades that reached ≥1R, the maximum unrealized profit was this much left on the table",
     "Mean Left_R (diagnostic)": f"{df_feasible['Left_R'].mean():.4f}",
 }
 
