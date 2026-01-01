@@ -24,15 +24,18 @@ REQUIRE_DD_STABLE = False   # require DD to not make new lows in lookback period
 
 
 # --- Date range filter (set to None to disable) ---
-# START_DATE = "2020-09-01"
-# END_DATE = "2021-06-18"
-START_DATE = None
-END_DATE = None
+# START_DATE = None
+START_DATE = "2019-10-01"
+# END_DATE = "2021-01-01"
+# START_DATE = "2020-01-01"
+END_DATE = "2021-01-20"
+
+# END_DATE = None
 
 # --- New account start triggers ---
-MAX_ACCOUNTS = 40
-START_IF_DD_THRESHOLD = 1500  # DD trigger to start next account
-START_IF_PROFIT_THRESHOLD = 50000    # Profit trigger to start next account (set too high to disable)
+MAX_ACCOUNTS = 1
+START_IF_DD_THRESHOLD = 5000  # DD trigger to start next account
+START_IF_PROFIT_THRESHOLD = 100    # Profit trigger to start next account (set too high to disable)
 
 RECOVERY_LEVEL = 0   # require DD to recover above this value before next account can start
 MIN_DAYS_BETWEEN_STARTS = 5  # minimum days between starting new accounts
@@ -289,7 +292,7 @@ portfolio_eq, acc_eq_df, num_alive = simulate_staggered_accounts(pl, START_CAPIT
 # ======================
 
 
-plt.figure(figsize=(14, 5))
+plt.figure(figsize=(10, 5))
 plt.fill_between(dd_series.index, dd_series.values, 0, step="mid", color="blue")
 plt.title("Drawdown Curve")
 plt.ylabel("Drawdown")
@@ -300,7 +303,7 @@ plt.tight_layout()
 #  EQUITY PLOT
 # ======================
 
-plt.figure(figsize=(14, 6))
+plt.figure(figsize=(10, 6))
 if SHOW_PORTFOLIO_TOTAL_EQUITY:
     plt.plot(portfolio_eq.index, portfolio_eq.values, label="Portfolio total equity", linewidth=4)
 for c in acc_eq_df.columns:

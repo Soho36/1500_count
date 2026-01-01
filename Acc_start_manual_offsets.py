@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 # ======================
 CSV_PATH = "CSVS/all_times_14_flat_ONLY_PNL.csv"
 START_CAPITAL = 5000
-NUM_ACCOUNTS = 2
+NUM_ACCOUNTS = 20
 
 # START_DATE = "2020-02-24"
 # END_DATE = "2021-06-18"
@@ -15,7 +15,7 @@ START_DATE = None
 END_DATE = None
 
 USE_MANUAL_OFFSETS = True
-MANUAL_OFFSETS = [120, 60, 90, 120, 15]  # in trading days
+MANUAL_OFFSETS = [30, 30, 30, 30, 30]  # in trading days
 
 # ======================
 #  FUNCTIONS
