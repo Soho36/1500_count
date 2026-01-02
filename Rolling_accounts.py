@@ -24,11 +24,11 @@ REQUIRE_DD_STABLE = False   # require DD to not make new lows in lookback period
 
 
 # --- Date range filter (set to None to disable) ---
-START_DATE = None
+# START_DATE = None
 END_DATE = None
 
-# START_DATE = "2019-10-01"
-# # END_DATE = "2021-01-01"
+START_DATE = "2020-06-01"
+# END_DATE = "2020-04-01"
 # # START_DATE = "2020-01-01"
 # END_DATE = "2021-01-20"
 
@@ -38,8 +38,8 @@ SHOW_PORTFOLIO_TOTAL_EQUITY = True          # if True, show total equity of all 
 SHOW_DRAWDOWN_PLOT = False                  # if True, show drawdown plot
 
 # Which weekday accounts to start (0=Monday, 1=Tuesday, 2=Wednesday, 3=Thursday, 4=Friday)
-# ACTIVE_WEEKDAYS = [0, 1, 2, 3, 4]     # all weekdays
-ACTIVE_WEEKDAYS = [4]                   # specific weekdays only (e.g., only Tuesday accounts)
+ACTIVE_WEEKDAYS = [0, 1, 2, 3, 4]     # all weekdays
+# ACTIVE_WEEKDAYS = [3]                   # specific weekdays only (e.g., only Tuesday accounts)
 
 
 # ======================

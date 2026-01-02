@@ -24,23 +24,24 @@ REQUIRE_DD_STABLE = False   # require DD to not make new lows in lookback period
 
 
 # --- Date range filter (set to None to disable) ---
-# START_DATE = None
-START_DATE = "2019-10-01"
-# END_DATE = "2021-01-01"
+START_DATE = None
+# START_DATE = "2020-02-01"
+# END_DATE = "2020-04-01"
 # START_DATE = "2020-01-01"
-END_DATE = "2021-01-20"
+# END_DATE = "2021-01-20"
 
-# END_DATE = None
+END_DATE = None
 
 # --- New account start triggers ---
-MAX_ACCOUNTS = 1
-START_IF_DD_THRESHOLD = 5000  # DD trigger to start next account
-START_IF_PROFIT_THRESHOLD = 100    # Profit trigger to start next account (set too high to disable)
+MAX_ACCOUNTS = 100
+START_IF_DD_THRESHOLD = 10000  # DD trigger to start next account
+START_IF_PROFIT_THRESHOLD = 500    # Profit trigger to start next account (set too high to disable)
 
 RECOVERY_LEVEL = 0   # require DD to recover above this value before next account can start
-MIN_DAYS_BETWEEN_STARTS = 5  # minimum days between starting new accounts
+MIN_DAYS_BETWEEN_STARTS = 1  # minimum days between starting new accounts
 
 SHOW_PORTFOLIO_TOTAL_EQUITY = False     # if True, show total equity of all accounts combined
+SHOW_DD_PLOT = True
 
 
 # ======================
@@ -291,13 +292,13 @@ portfolio_eq, acc_eq_df, num_alive = simulate_staggered_accounts(pl, START_CAPIT
 #  DRAWDOWN PLOT
 # ======================
 
-
-plt.figure(figsize=(10, 5))
-plt.fill_between(dd_series.index, dd_series.values, 0, step="mid", color="blue")
-plt.title("Drawdown Curve")
-plt.ylabel("Drawdown")
-plt.grid(True)
-plt.tight_layout()
+if SHOW_DD_PLOT:
+    plt.figure(figsize=(10, 5))
+    plt.fill_between(dd_series.index, dd_series.values, 0, step="mid", color="blue")
+    plt.title("Drawdown Curve")
+    plt.ylabel("Drawdown")
+    plt.grid(True)
+    plt.tight_layout()
 
 # ======================
 #  EQUITY PLOT
@@ -314,9 +315,17 @@ plt.grid(True)
 # plt.show()
 
 # quick stats
-print("Final portfolio equity:", portfolio_eq.iloc[-1])
-print("Num accounts started:", acc_eq_df.notna().any().sum())
-print("Number of accounts still alive at end:", num_alive.iloc[-1])
+number_accounts_started = acc_eq_df.notna().any().sum()
+number_accounts_alive = num_alive.iloc[-1]
+final_portfolio_equity = portfolio_eq.iloc[-1]
+
+print("\n=== Simulation Results ===")
+print(f"START_IF_DD_THRESHOLD: {START_IF_DD_THRESHOLD}")
+print(f"START_IF_PROFIT_THRESHOLD: {START_IF_PROFIT_THRESHOLD}")
+print("Final portfolio equity:", final_portfolio_equity)
+print("Num accounts started:", number_accounts_started)
+print("Number of accounts still alive at end:", number_accounts_alive)
+print("Number of accounts blown:", number_accounts_started - number_accounts_alive)
 
 try:
     plt.show()
