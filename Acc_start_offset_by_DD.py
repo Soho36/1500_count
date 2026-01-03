@@ -10,8 +10,8 @@ pd.set_option('display.max_rows', 2000)         # Show max 100 rows when printin
 pd.set_option('display.max_columns', 10)       # Show max 50 columns when printing
 
 # CSV_PATH = "CSVS/all_times_14_flat_ONLY_PNL.csv"
-CSV_PATH = "CSVS/premarket_only.csv"
-# CSV_PATH = "CSVS/all_times_14_flat.csv"
+# CSV_PATH = "CSVS/premarket_only.csv"
+CSV_PATH = "CSVS/all_times_14_flat.csv"
 START_CAPITAL = 1500
 
 # --- Drawdown settings ---
@@ -42,6 +42,9 @@ MIN_DAYS_BETWEEN_STARTS = 1  # minimum days between starting new accounts
 
 SHOW_PORTFOLIO_TOTAL_EQUITY = False     # if True, show total equity of all accounts combined
 SHOW_DD_PLOT = True
+
+DD_RANGE = range(2000, 12001, 2000)        # 2k → 12k
+PROFIT_RANGE = range(200, 1201, 200)      # 200 → 1200
 
 
 # ======================
@@ -140,152 +143,202 @@ dd_series = compute_drawdown_series(equity_original)
 dd_rolling_min = dd_series.rolling(DD_LOOKBACK, min_periods=1).min()
 
 
-def simulate_staggered_accounts(pl_series, start_capital, max_accounts):
-    dates = pl_series.index
-    accounts = []
+def run_simulation(dd_threshold, profit_threshold):
+    global START_IF_DD_THRESHOLD, START_IF_PROFIT_THRESHOLD
 
-    # --- START FIRST ACCOUNT RIGHT AWAY ---
-    accounts.append({
-        'start_idx': 0,
-        'equity': start_capital,
-        'rolling_max': start_capital,
-        'drawdown': 0.0,
-        'alive': True
-    })
+    START_IF_DD_THRESHOLD = dd_threshold
+    START_IF_PROFIT_THRESHOLD = profit_threshold
 
-    # next_threshold_idx = 0
-    last_start_day = 0
-    waiting_for_recovery = False
+    def simulate_staggered_accounts(pl_series, start_capital, max_accounts):
+        dates = pl_series.index
+        accounts = []
 
-    portfolio_equity = []
-    num_alive = []
-    account_equities_over_time = []
+        # --- START FIRST ACCOUNT RIGHT AWAY ---
+        accounts.append({
+            'start_idx': 0,
+            'equity': start_capital,
+            'rolling_max': start_capital,
+            'drawdown': 0.0,
+            'alive': True
+        })
 
-    for i_date, date in enumerate(dates):
+        # next_threshold_idx = 0
+        last_start_day = 0
+        waiting_for_recovery = False
 
-        # ----- UPDATE EXISTING ACCOUNTS -----
-        today_equities = []
-        for acc in accounts:
-            if acc['alive'] and i_date >= acc['start_idx']:
-                acc['equity'] += pl_series.iloc[i_date]
-                # Update rolling peak
-                acc['rolling_max'] = max(acc['rolling_max'], acc['equity'])
-                # Compute drawdown
-                acc['drawdown'] = acc['equity'] - acc['rolling_max']
-                # --- Trailing DD shifts to fixed floor once threshold reached ---
-                if acc['rolling_max'] < DD_FREEZE_TRIGGER:
-                    # Trailing mode (normal)
-                    dd_floor = acc['rolling_max'] - TRAILING_DD
-                else:
-                    # Fixed mode (freeze)
-                    dd_floor = FROZEN_DD_FLOOR
+        portfolio_equity = []
+        num_alive = []
+        account_equities_over_time = []
 
-                # Check if account violates DD rule
-                if acc['equity'] <= dd_floor:
-                    acc['alive'] = False
+        for i_date, date in enumerate(dates):
 
-                # Account cannot go below zero
-                if acc['equity'] <= 0:
-                    acc['alive'] = False
-
-            today_equities.append(acc['equity'] if acc['start_idx'] <= i_date else np.nan)
-
-        # ----- RECORDING -----
-        total_equity = sum(a['equity'] for a in accounts if a['alive'])     # only sum alive accounts
-        portfolio_equity.append(total_equity)
-
-        row = [np.nan] * max_accounts
-        for k, acc in enumerate(accounts):
-            row[k] = acc['equity'] if acc['start_idx'] <= i_date else np.nan
-        account_equities_over_time.append(row)
-
-        num_alive.append(sum(a['alive'] for a in accounts))
-
-        # =====================================================
-        #   NEW ACCOUNT START LOGIC WITH RECOVERY REQUIREMENT
-        # =====================================================
-
-        if len(accounts) < max_accounts:
-
-            # Build drawdown list from alive accounts
-            active_dds = [acc['drawdown'] for acc in accounts
-                          if acc['alive'] and acc['start_idx'] <= i_date]
-
-            current_dd = min(active_dds) if active_dds else 0
-
-            global_dd_now = dd_series.iloc[i_date]
-            global_dd_recent_min = dd_rolling_min.iloc[i_date - 1] if i_date > 0 else 0
-
-            dd_not_making_new_lows = global_dd_now >= global_dd_recent_min
-
-            # ===== START LOGIC =====
-            if waiting_for_recovery:
-                can_start = False
-
-                # Enough recovery?
-                if current_dd >= RECOVERY_LEVEL:
-                    waiting_for_recovery = False
-
-            else:
-                trigger_dd = False
-                trigger_profit = False
-
-                # --- DD TRIGGER ---
-                if START_IF_DD_THRESHOLD is not None:
-                    if current_dd <= -1 * START_IF_DD_THRESHOLD:
-                        trigger_dd = True
-
-                # --- PROFIT TRIGGER (per-account profit) ---
-                if START_IF_PROFIT_THRESHOLD is not None:
-
-                    # find last alive account
-                    alive_accounts = [acc for acc in accounts if acc['alive']]
-
-                    if alive_accounts:
-                        last_alive = alive_accounts[-1]
-                        acc_profit_since_start = last_alive['equity'] - start_capital
-
-                        if acc_profit_since_start >= START_IF_PROFIT_THRESHOLD:
-                            trigger_profit = True
+            # ----- UPDATE EXISTING ACCOUNTS -----
+            today_equities = []
+            for acc in accounts:
+                if acc['alive'] and i_date >= acc['start_idx']:
+                    acc['equity'] += pl_series.iloc[i_date]
+                    # Update rolling peak
+                    acc['rolling_max'] = max(acc['rolling_max'], acc['equity'])
+                    # Compute drawdown
+                    acc['drawdown'] = acc['equity'] - acc['rolling_max']
+                    # --- Trailing DD shifts to fixed floor once threshold reached ---
+                    if acc['rolling_max'] < DD_FREEZE_TRIGGER:
+                        # Trailing mode (normal)
+                        dd_floor = acc['rolling_max'] - TRAILING_DD
                     else:
-                        # if all accounts are blown, allow a new start immediately
-                        trigger_profit = True
+                        # Fixed mode (freeze)
+                        dd_floor = FROZEN_DD_FLOOR
 
-                # Combined logic
-                if trigger_dd or trigger_profit:
-                    if REQUIRE_DD_STABLE:
-                        can_start = dd_not_making_new_lows
-                    else:
-                        can_start = True
+                    # Check if account violates DD rule
+                    if acc['equity'] <= dd_floor:
+                        acc['alive'] = False
 
-                else:
+                    # Account cannot go below zero
+                    if acc['equity'] <= 0:
+                        acc['alive'] = False
+
+                today_equities.append(acc['equity'] if acc['start_idx'] <= i_date else np.nan)
+
+            # ----- RECORDING -----
+            total_equity = sum(a['equity'] for a in accounts if a['alive'])  # only sum alive accounts
+            portfolio_equity.append(total_equity)
+
+            row = [np.nan] * max_accounts
+            for k, acc in enumerate(accounts):
+                row[k] = acc['equity'] if acc['start_idx'] <= i_date else np.nan
+            account_equities_over_time.append(row)
+
+            num_alive.append(sum(a['alive'] for a in accounts))
+
+            # =====================================================
+            #   NEW ACCOUNT START LOGIC WITH RECOVERY REQUIREMENT
+            # =====================================================
+
+            if len(accounts) < max_accounts:
+
+                # Build drawdown list from alive accounts
+                active_dds = [acc['drawdown'] for acc in accounts
+                              if acc['alive'] and acc['start_idx'] <= i_date]
+
+                current_dd = min(active_dds) if active_dds else 0
+
+                global_dd_now = dd_series.iloc[i_date]
+                global_dd_recent_min = dd_rolling_min.iloc[i_date - 1] if i_date > 0 else 0
+
+                dd_not_making_new_lows = global_dd_now >= global_dd_recent_min
+
+                # ===== START LOGIC =====
+                if waiting_for_recovery:
                     can_start = False
 
-            # ---- Time-based guard ----
-            if can_start and (i_date - last_start_day) >= MIN_DAYS_BETWEEN_STARTS:
-                new_acc = {
-                    'start_idx': i_date,
-                    'equity': start_capital,
-                    'rolling_max': start_capital,
-                    'drawdown': 0.0,
-                    'alive': True
-                }
-                accounts.append(new_acc)
-                last_start_day = i_date
-                waiting_for_recovery = True   # require recovery before next start
-                # next_threshold_idx += 1
+                    # Enough recovery?
+                    if current_dd >= RECOVERY_LEVEL:
+                        waiting_for_recovery = False
 
-    # Convert to pandas
-    portfolio_eq_series = pd.Series(portfolio_equity, index=dates)
-    acc_eq_df = pd.DataFrame(account_equities_over_time, index=dates,
-                             columns=[f"acc_{i+1}" for i in range(max_accounts)])
-    num_alive_series = pd.Series(num_alive, index=dates)
-    return portfolio_eq_series, acc_eq_df, num_alive_series
+                else:
+                    trigger_dd = False
+                    trigger_profit = False
+
+                    # --- DD TRIGGER ---
+                    if START_IF_DD_THRESHOLD is not None:
+                        if current_dd <= -1 * START_IF_DD_THRESHOLD:
+                            trigger_dd = True
+
+                    # --- PROFIT TRIGGER (per-account profit) ---
+                    if START_IF_PROFIT_THRESHOLD is not None:
+
+                        # find last alive account
+                        alive_accounts = [acc for acc in accounts if acc['alive']]
+
+                        if alive_accounts:
+                            last_alive = alive_accounts[-1]
+                            acc_profit_since_start = last_alive['equity'] - start_capital
+
+                            if acc_profit_since_start >= START_IF_PROFIT_THRESHOLD:
+                                trigger_profit = True
+                        else:
+                            # if all accounts are blown, allow a new start immediately
+                            trigger_profit = True
+
+                    # Combined logic
+                    if trigger_dd or trigger_profit:
+                        if REQUIRE_DD_STABLE:
+                            can_start = dd_not_making_new_lows
+                        else:
+                            can_start = True
+
+                    else:
+                        can_start = False
+
+                # ---- Time-based guard ----
+                if can_start and (i_date - last_start_day) >= MIN_DAYS_BETWEEN_STARTS:
+                    new_acc = {
+                        'start_idx': i_date,
+                        'equity': start_capital,
+                        'rolling_max': start_capital,
+                        'drawdown': 0.0,
+                        'alive': True
+                    }
+                    accounts.append(new_acc)
+                    last_start_day = i_date
+                    waiting_for_recovery = True  # require recovery before next start
+                    # next_threshold_idx += 1
+
+        # Convert to pandas
+        portfolio_eq_series = pd.Series(portfolio_equity, index=dates)
+        acc_eq_df = pd.DataFrame(account_equities_over_time, index=dates,
+                                 columns=[f"acc_{i + 1}" for i in range(max_accounts)])
+        num_alive_series = pd.Series(num_alive, index=dates)
+        return portfolio_eq_series, acc_eq_df, num_alive_series
+
+    portfolio_eq, acc_eq_df, num_alive = simulate_staggered_accounts(
+        pl, START_CAPITAL, MAX_ACCOUNTS
+    )
+
+    num_started = acc_eq_df.notna().any().sum()
+    num_alive_end = num_alive.iloc[-1]
+    final_equity = portfolio_eq.iloc[-1]
+
+    # portfolio drawdown
+    portfolio_dd = compute_drawdown_series(portfolio_eq).min()
+
+    return {
+        "DD_threshold": dd_threshold,
+        "Profit_threshold": profit_threshold,
+        "Final_equity": final_equity,
+        "Accounts_started": num_started,
+        "Accounts_alive": num_alive_end,
+        "Accounts_blown": num_started - num_alive_end,
+        "Portfolio_max_DD": portfolio_dd
+    }
 
 
-portfolio_eq, acc_eq_df, num_alive = simulate_staggered_accounts(pl, START_CAPITAL, MAX_ACCOUNTS)
+results = []
 
-# print(f"Acc equity diff{acc_eq_df}")
+for dd in DD_RANGE:
+    for profit in PROFIT_RANGE:
+        res = run_simulation(dd, profit)
+        results.append(res)
+        print("Done:", res)
+
+results_df = pd.DataFrame(results)
+
+results_df.sort_values(
+    by=["Final_equity"],
+    ascending=False,
+    inplace=True
+)
+
+results_df.to_excel("optimization_results.xlsx", index=False)
+print("\nSaved optimization_results.xlsx")
+
+filtered = results_df[
+    (results_df["Accounts_blown"] == 0) &
+    (results_df["Portfolio_max_DD"] > -START_CAPITAL * 3)
+]
+
+filtered.to_excel("optimization_filtered.xlsx", index=False)
+print("Saved optimization_filtered.xlsx")
 
 
 # ======================
@@ -304,30 +357,30 @@ if SHOW_DD_PLOT:
 #  EQUITY PLOT
 # ======================
 
-plt.figure(figsize=(10, 6))
-if SHOW_PORTFOLIO_TOTAL_EQUITY:
-    plt.plot(portfolio_eq.index, portfolio_eq.values, label="Portfolio total equity", linewidth=4)
-for c in acc_eq_df.columns:
-    plt.plot(acc_eq_df.index, acc_eq_df[c], alpha=0.8, label=c)
-# plt.legend()
-plt.title("Staggered Accounts Simulation")
-plt.grid(True)
-# plt.show()
-
-# quick stats
-number_accounts_started = acc_eq_df.notna().any().sum()
-number_accounts_alive = num_alive.iloc[-1]
-final_portfolio_equity = portfolio_eq.iloc[-1]
-
-print("\n=== Simulation Results ===")
-print(f"START_IF_DD_THRESHOLD: {START_IF_DD_THRESHOLD}")
-print(f"START_IF_PROFIT_THRESHOLD: {START_IF_PROFIT_THRESHOLD}")
-print("Final portfolio equity:", final_portfolio_equity)
-print("Num accounts started:", number_accounts_started)
-print("Number of accounts still alive at end:", number_accounts_alive)
-print("Number of accounts blown:", number_accounts_started - number_accounts_alive)
-
-try:
-    plt.show()
-except KeyboardInterrupt:
-    print("Script stopped by user.")
+# plt.figure(figsize=(10, 6))
+# if SHOW_PORTFOLIO_TOTAL_EQUITY:
+#     plt.plot(portfolio_eq.index, portfolio_eq.values, label="Portfolio total equity", linewidth=4)
+# for c in acc_eq_df.columns:
+#     plt.plot(acc_eq_df.index, acc_eq_df[c], alpha=0.8, label=c)
+# # plt.legend()
+# plt.title("Staggered Accounts Simulation")
+# plt.grid(True)
+# # plt.show()
+#
+# # quick stats
+# number_accounts_started = acc_eq_df.notna().any().sum()
+# number_accounts_alive = num_alive.iloc[-1]
+# final_portfolio_equity = portfolio_eq.iloc[-1]
+#
+# print("\n=== Simulation Results ===")
+# print(f"START_IF_DD_THRESHOLD: {START_IF_DD_THRESHOLD}")
+# print(f"START_IF_PROFIT_THRESHOLD: {START_IF_PROFIT_THRESHOLD}")
+# print("Final portfolio equity:", final_portfolio_equity)
+# print("Num accounts started:", number_accounts_started)
+# print("Number of accounts still alive at end:", number_accounts_alive)
+# print("Number of accounts blown:", number_accounts_started - number_accounts_alive)
+#
+# try:
+#     plt.show()
+# except KeyboardInterrupt:
+#     print("Script stopped by user.")
