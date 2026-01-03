@@ -9,9 +9,9 @@ pd.set_option('display.min_rows', 1000)         # Show min 1000 rows when printi
 pd.set_option('display.max_rows', 2000)         # Show max 100 rows when printing
 pd.set_option('display.max_columns', 10)       # Show max 50 columns when printing
 
-# CSV_PATH = "CSVS/all_times_14_flat_ONLY_PNL.csv"
-# CSV_PATH = "CSVS/premarket_only.csv"
-CSV_PATH = "CSVS/all_times_14_flat.csv"
+# CSV_PATH = "../CSVS/all_times_14_flat_ONLY_PNL.csv"
+# CSV_PATH = "../CSVS/premarket_only.csv"
+CSV_PATH = "../CSVS/all_times_14_flat.csv"
 START_CAPITAL = 1500
 
 # --- Drawdown settings ---
@@ -22,29 +22,41 @@ FROZEN_DD_FLOOR = START_CAPITAL + 100
 DD_LOOKBACK = 10          # days to check for new lows
 REQUIRE_DD_STABLE = False   # require DD to not make new lows in lookback period before starting new account
 
-
 # --- Date range filter (set to None to disable) ---
 START_DATE = None
 # START_DATE = "2020-02-01"
 # END_DATE = "2020-04-01"
 # START_DATE = "2020-01-01"
 # END_DATE = "2021-01-20"
-
 END_DATE = None
 
 # --- New account start triggers ---
-MAX_ACCOUNTS = 100
-START_IF_DD_THRESHOLD = 10000  # DD trigger to start next account
-START_IF_PROFIT_THRESHOLD = 500    # Profit trigger to start next account (set too high to disable)
+MAX_ACCOUNTS = 5
 
+# --- Profit triggers ---
+USE_PROFIT_TRIGGER = False
+START_PROFIT_THRESHOLD = 1000    # Profit trigger to start next account
+END_DD_PROFIT_THRESHOLD = 7000   # Profit level to stop starting new accounts
+STEP_PROFIT = 1000
+
+# --- Drawdown triggers ---
+USE_DD_TRIGGER = True
+START_DD_THRESHOLD = 5000  # DD trigger to start next account
+END_DD_THRESHOLD = 7000    # DD level to stop starting new accounts
+STEP_DD = 500
+
+# --- Optimization ranges ---
+PROFIT_RANGE = range(START_PROFIT_THRESHOLD, END_DD_PROFIT_THRESHOLD, STEP_PROFIT)
+DD_RANGE = range(START_DD_THRESHOLD, END_DD_THRESHOLD, STEP_DD)
+
+
+# --- Recovery requirement ---
 RECOVERY_LEVEL = 0   # require DD to recover above this value before next account can start
 MIN_DAYS_BETWEEN_STARTS = 1  # minimum days between starting new accounts
 
+# --- Display options ---
 SHOW_PORTFOLIO_TOTAL_EQUITY = False     # if True, show total equity of all accounts combined
-SHOW_DD_PLOT = True
-
-DD_RANGE = range(2000, 12001, 2000)        # 2k → 12k
-PROFIT_RANGE = range(200, 1201, 200)      # 200 → 1200
+SHOW_DD_PLOT = False
 
 
 # ======================
@@ -55,25 +67,22 @@ PROFIT_RANGE = range(200, 1201, 200)      # 200 → 1200
 def calculate_max_drawdown(equity):
     """Calculate maximum drawdown of an equity series."""
     rolling_max = equity.cummax()
-    dd = equity - rolling_max
-    return dd.min()
+    drawdown = equity - rolling_max
+    return drawdown.min()
 
 
-start_capital = START_CAPITAL
-
-
-def build_equity_from_pl(pl_series, offset, start_capital):
+def build_equity_from_pl(pl_series, offset, st_capital):
     """Start the equity curve from <offset> days later using correct P&L values."""
     shifted_pl = pl_series.iloc[offset:]
-    equity = start_capital + shifted_pl.cumsum()
+    equity = st_capital + shifted_pl.cumsum()
     return equity
 
 
 def compute_drawdown_series(equity):
     """Return drawdown series indexed by date."""
     rolling_max = equity.cummax()
-    dd_series = equity - rolling_max
-    return dd_series
+    drawdown_series = equity - rolling_max
+    return drawdown_series
 
 
 def print_config():
@@ -94,8 +103,8 @@ def print_config():
         print(f"END_DATE: {END_DATE}")
 
     print(f"MAX_ACCOUNTS: {MAX_ACCOUNTS}")
-    print(f"START_IF_DD_THRESHOLD: {START_IF_DD_THRESHOLD}")
-    print(f"START_IF_PROFIT_THRESHOLD: {START_IF_PROFIT_THRESHOLD}")
+    print(f"START_IF_DD_THRESHOLD: {START_DD_THRESHOLD}")
+    print(f"START_IF_PROFIT_THRESHOLD: {START_PROFIT_THRESHOLD}")
     print(f"RECOVERY_LEVEL: {RECOVERY_LEVEL}")
     print(f"MIN_DAYS_BETWEEN_STARTS: {MIN_DAYS_BETWEEN_STARTS}")
     print(f"SHOW_PORTFOLIO_TOTAL_EQUITY: {SHOW_PORTFOLIO_TOTAL_EQUITY}")
@@ -113,7 +122,12 @@ print_config()
 # ======================
 #  LOAD & CLEAN DATA
 # ======================
-df = pd.read_csv(CSV_PATH, sep="\t")
+try:
+    df = pd.read_csv(CSV_PATH, sep="\t")
+except Exception as e:
+    print("Error loading CSV file:".upper(), e)
+    exit(1)
+
 df["P.L"] = df["P.L"].astype(str).str.replace(",", ".").str.strip()
 df["P.L"] = pd.to_numeric(df["P.L"], errors='coerce').fillna(0)
 
@@ -144,30 +158,25 @@ dd_rolling_min = dd_series.rolling(DD_LOOKBACK, min_periods=1).min()
 
 
 def run_simulation(dd_threshold, profit_threshold):
-    global START_IF_DD_THRESHOLD, START_IF_PROFIT_THRESHOLD
 
-    START_IF_DD_THRESHOLD = dd_threshold
-    START_IF_PROFIT_THRESHOLD = profit_threshold
-
-    def simulate_staggered_accounts(pl_series, start_capital, max_accounts):
+    def simulate_staggered_accounts(pl_series, st_capital, max_accounts):
         dates = pl_series.index
-        accounts = []
-
-        # --- START FIRST ACCOUNT RIGHT AWAY ---
-        accounts.append({
+        accounts = [{
             'start_idx': 0,
-            'equity': start_capital,
-            'rolling_max': start_capital,
+            'equity': st_capital,
+            'rolling_max': st_capital,
             'drawdown': 0.0,
             'alive': True
-        })
+        }]
+
+        # --- START FIRST ACCOUNT RIGHT AWAY ---
 
         # next_threshold_idx = 0
         last_start_day = 0
         waiting_for_recovery = False
 
         portfolio_equity = []
-        num_alive = []
+        num_acc_alive = []
         account_equities_over_time = []
 
         for i_date, date in enumerate(dates):
@@ -208,7 +217,7 @@ def run_simulation(dd_threshold, profit_threshold):
                 row[k] = acc['equity'] if acc['start_idx'] <= i_date else np.nan
             account_equities_over_time.append(row)
 
-            num_alive.append(sum(a['alive'] for a in accounts))
+            num_acc_alive.append(sum(a['alive'] for a in accounts))
 
             # =====================================================
             #   NEW ACCOUNT START LOGIC WITH RECOVERY REQUIREMENT
@@ -240,21 +249,21 @@ def run_simulation(dd_threshold, profit_threshold):
                     trigger_profit = False
 
                     # --- DD TRIGGER ---
-                    if START_IF_DD_THRESHOLD is not None:
-                        if current_dd <= -1 * START_IF_DD_THRESHOLD:
+                    if USE_DD_TRIGGER and dd_threshold is not None:
+                        if current_dd <= -1 * dd_threshold:
                             trigger_dd = True
 
                     # --- PROFIT TRIGGER (per-account profit) ---
-                    if START_IF_PROFIT_THRESHOLD is not None:
+                    if USE_PROFIT_TRIGGER and profit_threshold is not None:
 
                         # find last alive account
                         alive_accounts = [acc for acc in accounts if acc['alive']]
 
                         if alive_accounts:
                             last_alive = alive_accounts[-1]
-                            acc_profit_since_start = last_alive['equity'] - start_capital
+                            acc_profit_since_start = last_alive['equity'] - st_capital
 
-                            if acc_profit_since_start >= START_IF_PROFIT_THRESHOLD:
+                            if acc_profit_since_start >= profit_threshold:
                                 trigger_profit = True
                         else:
                             # if all accounts are blown, allow a new start immediately
@@ -274,8 +283,8 @@ def run_simulation(dd_threshold, profit_threshold):
                 if can_start and (i_date - last_start_day) >= MIN_DAYS_BETWEEN_STARTS:
                     new_acc = {
                         'start_idx': i_date,
-                        'equity': start_capital,
-                        'rolling_max': start_capital,
+                        'equity': st_capital,
+                        'rolling_max': st_capital,
                         'drawdown': 0.0,
                         'alive': True
                     }
@@ -286,10 +295,10 @@ def run_simulation(dd_threshold, profit_threshold):
 
         # Convert to pandas
         portfolio_eq_series = pd.Series(portfolio_equity, index=dates)
-        acc_eq_df = pd.DataFrame(account_equities_over_time, index=dates,
-                                 columns=[f"acc_{i + 1}" for i in range(max_accounts)])
-        num_alive_series = pd.Series(num_alive, index=dates)
-        return portfolio_eq_series, acc_eq_df, num_alive_series
+        acc_eq_dataframe = pd.DataFrame(account_equities_over_time, index=dates,
+                                        columns=[f"acc_{i + 1}" for i in range(max_accounts)])
+        num_alive_series = pd.Series(num_acc_alive, index=dates)
+        return portfolio_eq_series, acc_eq_dataframe, num_alive_series
 
     portfolio_eq, acc_eq_df, num_alive = simulate_staggered_accounts(
         pl, START_CAPITAL, MAX_ACCOUNTS
@@ -303,6 +312,8 @@ def run_simulation(dd_threshold, profit_threshold):
     portfolio_dd = compute_drawdown_series(portfolio_eq).min()
 
     return {
+        "DD_trigger_used": USE_DD_TRIGGER,
+        "Profit_trigger_used": USE_PROFIT_TRIGGER,
         "DD_threshold": dd_threshold,
         "Profit_threshold": profit_threshold,
         "Final_equity": final_equity,
@@ -315,11 +326,16 @@ def run_simulation(dd_threshold, profit_threshold):
 
 results = []
 
-for dd in DD_RANGE:
-    for profit in PROFIT_RANGE:
+
+dd_values = DD_RANGE if USE_DD_TRIGGER else [None]
+profit_values = PROFIT_RANGE if USE_PROFIT_TRIGGER else [None]
+
+for dd in dd_values:
+    for profit in profit_values:
         res = run_simulation(dd, profit)
         results.append(res)
         print("Done:", res)
+
 
 results_df = pd.DataFrame(results)
 
@@ -328,17 +344,23 @@ results_df.sort_values(
     ascending=False,
     inplace=True
 )
+try:
+    results_df.to_excel("optimization_results.xlsx", index=False)
+    print("\nSaved optimization_results.xlsx")
+except Exception as e:
+    print("Error saving optimization_results.xlsx:".upper(), e)
 
-results_df.to_excel("optimization_results.xlsx", index=False)
-print("\nSaved optimization_results.xlsx")
 
 filtered = results_df[
     (results_df["Accounts_blown"] == 0) &
     (results_df["Portfolio_max_DD"] > -START_CAPITAL * 3)
 ]
 
-filtered.to_excel("optimization_filtered.xlsx", index=False)
-print("Saved optimization_filtered.xlsx")
+try:
+    filtered.to_excel("optimization_filtered.xlsx", index=False)
+    print("Saved optimization_filtered.xlsx")
+except Exception as e:
+    print("Error saving optimization_filtered.xlsx:".upper(), e)
 
 
 # ======================
