@@ -30,28 +30,28 @@ START_DATE = None
 END_DATE = None
 
 # --- New account start triggers ---
-MAX_ACCOUNTS = 20
-
+MAX_ACCOUNTS = 100
+# ==================================================================
 # --- Profit triggers ---
-USE_PROFIT_TRIGGER = True
-START_PROFIT_THRESHOLD = 2000    # Profit trigger to start next account
-END_DD_PROFIT_THRESHOLD = 7000   # Profit level to stop starting new accounts
-STEP_PROFIT = 1000
+USE_PROFIT_TRIGGER = False
+START_PROFIT_THRESHOLD = 100    # Profit trigger to start next account
+END_PROFIT_THRESHOLD = 3000   # Profit level to stop starting new accounts
+STEP_PROFIT = 100
 
 # --- Drawdown triggers ---
-USE_DD_TRIGGER = False
-START_DD_THRESHOLD = 1000  # DD trigger to start next account
-END_DD_THRESHOLD = 7000    # DD level to stop starting new accounts
-STEP_DD = 1000
+USE_DD_TRIGGER = True
+START_DD_THRESHOLD = 100  # DD trigger to start next account
+END_DD_THRESHOLD = 3000    # DD level to stop starting new accounts
+STEP_DD = 100
 
 # --- Optimization ranges ---
-PROFIT_RANGE = range(START_PROFIT_THRESHOLD, END_DD_PROFIT_THRESHOLD + STEP_PROFIT, STEP_PROFIT)
+PROFIT_RANGE = range(START_PROFIT_THRESHOLD, END_PROFIT_THRESHOLD + STEP_PROFIT, STEP_PROFIT)
 DD_RANGE = range(START_DD_THRESHOLD, END_DD_THRESHOLD + STEP_DD, STEP_DD)
 
 
 # --- Recovery requirement ---
 RECOVERY_LEVEL = 0   # require DD to recover above this value before next account can start
-MIN_DAYS_BETWEEN_STARTS = 1  # minimum days between starting new accounts                  # if True, show drawdown plot at the end
+MIN_DAYS_BETWEEN_STARTS = 1  # minimum days between starting new accounts
 
 # ======================
 #  FUNCTIONS
@@ -346,7 +346,13 @@ results_df.sort_values(
 )
 
 try:
-    file_name_1 = "optimization_results.xlsx"
+    if USE_PROFIT_TRIGGER:
+        file_name_1 = "profit_trigger_optimization_results.xlsx"
+    elif USE_DD_TRIGGER:
+        file_name_1 = "dd_trigger_optimization_results.xlsx"
+    else:
+        file_name_1 = "dd_plus_profit_optimization_results.xlsx"
+
     with pd.ExcelWriter(file_name_1, engine='openpyxl') as writer:
         results_df.to_excel(writer, index=False)
         workbook = writer.book
