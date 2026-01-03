@@ -1,5 +1,4 @@
 import pandas as pd
-import matplotlib.pyplot as plt
 import numpy as np
 
 # ========================================================================================
@@ -31,16 +30,16 @@ START_DATE = None
 END_DATE = None
 
 # --- New account start triggers ---
-MAX_ACCOUNTS = 10
+MAX_ACCOUNTS = 20
 
 # --- Profit triggers ---
-USE_PROFIT_TRIGGER = False
-START_PROFIT_THRESHOLD = 1000    # Profit trigger to start next account
+USE_PROFIT_TRIGGER = True
+START_PROFIT_THRESHOLD = 2000    # Profit trigger to start next account
 END_DD_PROFIT_THRESHOLD = 7000   # Profit level to stop starting new accounts
 STEP_PROFIT = 1000
 
 # --- Drawdown triggers ---
-USE_DD_TRIGGER = True
+USE_DD_TRIGGER = False
 START_DD_THRESHOLD = 1000  # DD trigger to start next account
 END_DD_THRESHOLD = 7000    # DD level to stop starting new accounts
 STEP_DD = 1000
@@ -52,12 +51,7 @@ DD_RANGE = range(START_DD_THRESHOLD, END_DD_THRESHOLD + STEP_DD, STEP_DD)
 
 # --- Recovery requirement ---
 RECOVERY_LEVEL = 0   # require DD to recover above this value before next account can start
-MIN_DAYS_BETWEEN_STARTS = 1  # minimum days between starting new accounts
-
-# --- Display options ---
-SHOW_PORTFOLIO_TOTAL_EQUITY = False     # if True, show total equity of all accounts combined
-SHOW_DD_PLOT = False
-
+MIN_DAYS_BETWEEN_STARTS = 1  # minimum days between starting new accounts                  # if True, show drawdown plot at the end
 
 # ======================
 #  FUNCTIONS
@@ -103,18 +97,24 @@ def print_config():
         print(f"END_DATE: {END_DATE}")
 
     print(f"MAX_ACCOUNTS: {MAX_ACCOUNTS}")
-    print(f"START_IF_DD_THRESHOLD: {START_DD_THRESHOLD}")
-    print(f"START_IF_PROFIT_THRESHOLD: {START_PROFIT_THRESHOLD}")
+    if USE_DD_TRIGGER:
+        print(f"START_IF_DD_THRESHOLD: {START_DD_THRESHOLD}")
+    else:
+        print("START_IF_DD_THRESHOLD: Disabled")
+
+    if USE_PROFIT_TRIGGER:
+        print(f"START_IF_PROFIT_THRESHOLD: {START_PROFIT_THRESHOLD}")
+    else:
+        print("START_IF_PROFIT_THRESHOLD: Disabled")
     print(f"RECOVERY_LEVEL: {RECOVERY_LEVEL}")
     print(f"MIN_DAYS_BETWEEN_STARTS: {MIN_DAYS_BETWEEN_STARTS}")
-    print(f"SHOW_PORTFOLIO_TOTAL_EQUITY: {SHOW_PORTFOLIO_TOTAL_EQUITY}")
     print("=====================")
     if REQUIRE_DD_STABLE:
         print(f"\nREQUIRE_DD_STABLE: {REQUIRE_DD_STABLE}")
         print(f"DD_LOOKBACK: {DD_LOOKBACK} days\n")
     else:
-        print(f"\nREQUIRE_DD_STABLE: {REQUIRE_DD_STABLE} (disabled)")
-        print(f"DD_LOOKBACK: {DD_LOOKBACK} days (disabled)\n")
+        print(f"\nREQUIRE_DD_STABLE: (disabled)")
+        print(f"DD_LOOKBACK: (disabled)\n")
 
 
 print_config()
@@ -306,21 +306,21 @@ def run_simulation(dd_threshold, profit_threshold):
 
     num_started = acc_eq_df.notna().any().sum()
     num_alive_end = num_alive.iloc[-1]
-    final_equity = portfolio_eq.iloc[-1]
+    final_equity = round(portfolio_eq.iloc[-1], 0)
 
     # portfolio drawdown
-    portfolio_dd = compute_drawdown_series(portfolio_eq).min()
+    portfolio_dd = round(compute_drawdown_series(portfolio_eq).min(), 0)
 
     return {
-        "DD_trigger_used": USE_DD_TRIGGER,
-        "Profit_trigger_used": USE_PROFIT_TRIGGER,
-        "DD_threshold": dd_threshold,
-        "Profit_threshold": profit_threshold,
+        "DD_trigger": USE_DD_TRIGGER,
+        "Prof_trigger": USE_PROFIT_TRIGGER,
+        "DD_thres": dd_threshold,
+        "Profit_thres": profit_threshold,
         "Final_equity": final_equity,
-        "Accounts_started": num_started,
-        "Accounts_alive": num_alive_end,
-        "Accounts_blown": num_started - num_alive_end,
-        "Portfolio_max_DD": portfolio_dd
+        "Accs_started": num_started,
+        "Accs_alive": num_alive_end,
+        "Accs_blown": num_started - num_alive_end,
+        "Portf_max_DD": portfolio_dd
     }
 
 
@@ -344,65 +344,19 @@ results_df.sort_values(
     ascending=False,
     inplace=True
 )
+
 try:
-    results_df.to_excel("optimization_results.xlsx", index=False)
-    print("\nSaved optimization_results.xlsx")
+    file_name_1 = "optimization_results.xlsx"
+    with pd.ExcelWriter(file_name_1, engine='openpyxl') as writer:
+        results_df.to_excel(writer, index=False)
+        workbook = writer.book
+        worksheet = writer.sheets['Sheet1']
+
+        # Adjust column widths
+        for column_cells in worksheet.columns:
+            max_length = max(len(str(cell.value)) for cell in column_cells if cell.value is not None)
+            column_letter = column_cells[0].column_letter
+            worksheet.column_dimensions[column_letter].width = max_length + 1
+    print(f"\nSaved: {file_name_1}")
 except Exception as e:
     print("Error saving optimization_results.xlsx:".upper(), e)
-
-
-filtered = results_df[
-    (results_df["Accounts_blown"] == 0) &
-    (results_df["Portfolio_max_DD"] > -START_CAPITAL * 3)
-]
-
-try:
-    filtered.to_excel("optimization_filtered.xlsx", index=False)
-    print("Saved optimization_filtered.xlsx")
-except Exception as e:
-    print("Error saving optimization_filtered.xlsx:".upper(), e)
-
-
-# ======================
-#  DRAWDOWN PLOT
-# ======================
-
-if SHOW_DD_PLOT:
-    plt.figure(figsize=(10, 5))
-    plt.fill_between(dd_series.index, dd_series.values, 0, step="mid", color="blue")
-    plt.title("Drawdown Curve")
-    plt.ylabel("Drawdown")
-    plt.grid(True)
-    plt.tight_layout()
-
-# ======================
-#  EQUITY PLOT
-# ======================
-
-# plt.figure(figsize=(10, 6))
-# if SHOW_PORTFOLIO_TOTAL_EQUITY:
-#     plt.plot(portfolio_eq.index, portfolio_eq.values, label="Portfolio total equity", linewidth=4)
-# for c in acc_eq_df.columns:
-#     plt.plot(acc_eq_df.index, acc_eq_df[c], alpha=0.8, label=c)
-# # plt.legend()
-# plt.title("Staggered Accounts Simulation")
-# plt.grid(True)
-# # plt.show()
-#
-# # quick stats
-# number_accounts_started = acc_eq_df.notna().any().sum()
-# number_accounts_alive = num_alive.iloc[-1]
-# final_portfolio_equity = portfolio_eq.iloc[-1]
-#
-# print("\n=== Simulation Results ===")
-# print(f"START_IF_DD_THRESHOLD: {START_IF_DD_THRESHOLD}")
-# print(f"START_IF_PROFIT_THRESHOLD: {START_IF_PROFIT_THRESHOLD}")
-# print("Final portfolio equity:", final_portfolio_equity)
-# print("Num accounts started:", number_accounts_started)
-# print("Number of accounts still alive at end:", number_accounts_alive)
-# print("Number of accounts blown:", number_accounts_started - number_accounts_alive)
-#
-# try:
-#     plt.show()
-# except KeyboardInterrupt:
-#     print("Script stopped by user.")
