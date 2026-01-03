@@ -10,8 +10,8 @@ pd.set_option('display.max_rows', 2000)         # Show max 100 rows when printin
 pd.set_option('display.max_columns', 10)       # Show max 50 columns when printing
 
 # CSV_PATH = "CSVS/all_times_14_flat_ONLY_PNL.csv"
-CSV_PATH = "CSVS/premarket_only.csv"
-# CSV_PATH = "CSVS/all_times_14_flat.csv"
+# CSV_PATH = "CSVS/premarket_only.csv"
+CSV_PATH = "CSVS/all_times_14_flat.csv"
 START_CAPITAL = 1500
 
 # --- Drawdown settings ---
@@ -24,8 +24,8 @@ REQUIRE_DD_STABLE = False   # require DD to not make new lows in lookback period
 
 
 # --- Date range filter (set to None to disable) ---
-START_DATE = None
-# START_DATE = "2020-02-01"
+# START_DATE = None
+START_DATE = "2024-09-01"
 # END_DATE = "2020-04-01"
 # START_DATE = "2020-01-01"
 # END_DATE = "2021-01-20"
@@ -33,9 +33,9 @@ START_DATE = None
 END_DATE = None
 
 # --- New account start triggers ---
-MAX_ACCOUNTS = 100
-START_IF_DD_THRESHOLD = 10000  # DD trigger to start next account
-START_IF_PROFIT_THRESHOLD = 500    # Profit trigger to start next account (set too high to disable)
+MAX_ACCOUNTS = 10
+START_IF_DD_THRESHOLD = 1000  # DD trigger to start next account
+START_IF_PROFIT_THRESHOLD = 5000000    # Profit trigger to start next account (set too high to disable)
 
 RECOVERY_LEVEL = 0   # require DD to recover above this value before next account can start
 MIN_DAYS_BETWEEN_STARTS = 1  # minimum days between starting new accounts
