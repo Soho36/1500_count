@@ -31,7 +31,7 @@ START_DATE = None
 END_DATE = None
 
 # --- New account start triggers ---
-MAX_ACCOUNTS = 5
+MAX_ACCOUNTS = 10
 
 # --- Profit triggers ---
 USE_PROFIT_TRIGGER = False
@@ -41,13 +41,13 @@ STEP_PROFIT = 1000
 
 # --- Drawdown triggers ---
 USE_DD_TRIGGER = True
-START_DD_THRESHOLD = 5000  # DD trigger to start next account
+START_DD_THRESHOLD = 1000  # DD trigger to start next account
 END_DD_THRESHOLD = 7000    # DD level to stop starting new accounts
-STEP_DD = 500
+STEP_DD = 1000
 
 # --- Optimization ranges ---
-PROFIT_RANGE = range(START_PROFIT_THRESHOLD, END_DD_PROFIT_THRESHOLD, STEP_PROFIT)
-DD_RANGE = range(START_DD_THRESHOLD, END_DD_THRESHOLD, STEP_DD)
+PROFIT_RANGE = range(START_PROFIT_THRESHOLD, END_DD_PROFIT_THRESHOLD + STEP_PROFIT, STEP_PROFIT)
+DD_RANGE = range(START_DD_THRESHOLD, END_DD_THRESHOLD + STEP_DD, STEP_DD)
 
 
 # --- Recovery requirement ---
