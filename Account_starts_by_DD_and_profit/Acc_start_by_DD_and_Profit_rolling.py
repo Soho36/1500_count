@@ -33,20 +33,28 @@ END_DATE = None
 MAX_ACCOUNTS = 100
 # ==================================================================
 # --- Profit triggers ---
-USE_PROFIT_TRIGGER = True
+USE_PROFIT_TRIGGER = False
 START_PROFIT_THRESHOLD = 3000    # Profit trigger to start next account
 END_PROFIT_THRESHOLD = 5000   # Profit level to stop starting new accounts
 STEP_PROFIT = 100
 
 # --- Drawdown triggers ---
-USE_DD_TRIGGER = False
+USE_DD_TRIGGER = True
 START_DD_THRESHOLD = 100  # DD trigger to start next account
 END_DD_THRESHOLD = 3000    # DD level to stop starting new accounts
 STEP_DD = 100
+USE_RECOVERY = False
+
+# --- Time-based start trigger ---
+USE_TIME_TRIGGER = False
+START_EVERY_N_DAYS_THRESHOLD = 10
+END_EVERY_N_DAYS_THRESHOLD = 100
+STEP_DAYS = 5
 
 # --- Optimization ranges ---
 PROFIT_RANGE = range(START_PROFIT_THRESHOLD, END_PROFIT_THRESHOLD + STEP_PROFIT, STEP_PROFIT)
 DD_RANGE = range(START_DD_THRESHOLD, END_DD_THRESHOLD + STEP_DD, STEP_DD)
+TIME_RANGE = range(START_EVERY_N_DAYS_THRESHOLD, END_EVERY_N_DAYS_THRESHOLD + STEP_DAYS, STEP_DAYS)
 
 
 # --- Recovery requirement ---
@@ -157,7 +165,7 @@ dd_series = compute_drawdown_series(equity_original)
 dd_rolling_min = dd_series.rolling(DD_LOOKBACK, min_periods=1).min()
 
 
-def run_simulation(dd_threshold, profit_threshold):
+def run_simulation(dd_threshold, profit_threshold, days_threshold):
 
     def simulate_staggered_accounts(pl_series, st_capital, max_accounts):
         dates = pl_series.index
@@ -237,7 +245,7 @@ def run_simulation(dd_threshold, profit_threshold):
                 dd_not_making_new_lows = global_dd_now >= global_dd_recent_min
 
                 # ===== START LOGIC =====
-                if waiting_for_recovery:
+                if waiting_for_recovery and USE_RECOVERY:
                     can_start = False
 
                     # Enough recovery?
@@ -247,6 +255,11 @@ def run_simulation(dd_threshold, profit_threshold):
                 else:
                     trigger_dd = False
                     trigger_profit = False
+                    time_trigger = False
+
+                    # --- TIME TRIGGER ---
+                    if USE_TIME_TRIGGER and days_threshold is not None:
+                        time_trigger = (i_date - last_start_day) >= days_threshold
 
                     # --- DD TRIGGER ---
                     if USE_DD_TRIGGER and dd_threshold is not None:
@@ -270,12 +283,13 @@ def run_simulation(dd_threshold, profit_threshold):
                             trigger_profit = True
 
                     # Combined logic
-                    if trigger_dd or trigger_profit:
+                    trigger_any = trigger_dd or trigger_profit or time_trigger
+
+                    if trigger_any:
                         if REQUIRE_DD_STABLE:
                             can_start = dd_not_making_new_lows
                         else:
                             can_start = True
-
                     else:
                         can_start = False
 
@@ -290,8 +304,8 @@ def run_simulation(dd_threshold, profit_threshold):
                     }
                     accounts.append(new_acc)
                     last_start_day = i_date
-                    waiting_for_recovery = True  # require recovery before next start
-                    # next_threshold_idx += 1
+                    if USE_RECOVERY:
+                        waiting_for_recovery = True  # require recovery before next start
 
         # Convert to pandas
         portfolio_eq_series = pd.Series(portfolio_equity, index=dates)
@@ -312,8 +326,10 @@ def run_simulation(dd_threshold, profit_threshold):
     portfolio_dd = round(compute_drawdown_series(portfolio_eq).min(), 0)
 
     return {
+        "Time_trigger": USE_TIME_TRIGGER,
         "DD_trigger": USE_DD_TRIGGER,
         "Prof_trigger": USE_PROFIT_TRIGGER,
+        "Days_thres": days_threshold,
         "DD_thres": dd_threshold,
         "Profit_thres": profit_threshold,
         "Final_equity": final_equity,
@@ -329,12 +345,14 @@ results = []
 
 dd_values = DD_RANGE if USE_DD_TRIGGER else [None]
 profit_values = PROFIT_RANGE if USE_PROFIT_TRIGGER else [None]
+day_values = TIME_RANGE if USE_TIME_TRIGGER else [None]
 
 for dd in dd_values:
     for profit in profit_values:
-        res = run_simulation(dd, profit)
-        results.append(res)
-        print("Done:", res)
+        for day in day_values:
+            res = run_simulation(dd, profit, day)
+            results.append(res)
+            print("Done:", res)
 
 
 results_df = pd.DataFrame(results)
@@ -350,6 +368,8 @@ try:
         file_name_1 = "profit_trigger_optimization_results.xlsx"
     elif USE_DD_TRIGGER:
         file_name_1 = "dd_trigger_optimization_results.xlsx"
+    elif USE_TIME_TRIGGER:
+        file_name_1 = "time_trigger_optimization_results.xlsx"
     else:
         file_name_1 = "dd_plus_profit_optimization_results.xlsx"
 
