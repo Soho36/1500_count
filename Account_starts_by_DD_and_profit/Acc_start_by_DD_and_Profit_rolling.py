@@ -33,13 +33,13 @@ END_DATE = None
 MAX_ACCOUNTS = 100
 # ==================================================================
 # --- Profit triggers ---
-USE_PROFIT_TRIGGER = False
-START_PROFIT_THRESHOLD = 100    # Profit trigger to start next account
-END_PROFIT_THRESHOLD = 3000   # Profit level to stop starting new accounts
+USE_PROFIT_TRIGGER = True
+START_PROFIT_THRESHOLD = 3000    # Profit trigger to start next account
+END_PROFIT_THRESHOLD = 5000   # Profit level to stop starting new accounts
 STEP_PROFIT = 100
 
 # --- Drawdown triggers ---
-USE_DD_TRIGGER = True
+USE_DD_TRIGGER = False
 START_DD_THRESHOLD = 100  # DD trigger to start next account
 END_DD_THRESHOLD = 3000    # DD level to stop starting new accounts
 STEP_DD = 100
