@@ -9,8 +9,8 @@ pd.set_option('display.max_rows', 2000)         # Show max 100 rows when printin
 pd.set_option('display.max_columns', 10)       # Show max 50 columns when printing
 
 # CSV_PATH = "../CSVS/all_times_14_flat_ONLY_PNL.csv"
-# CSV_PATH = "../CSVS/premarket_only.csv"
-CSV_PATH = "../CSVS/all_times_14_flat.csv"
+CSV_PATH = "../CSVS/premarket_only.csv"
+# CSV_PATH = "../CSVS/all_times_14_flat.csv"
 START_CAPITAL = 1500
 
 # --- Drawdown settings ---
@@ -39,16 +39,16 @@ END_PROFIT_THRESHOLD = 5000   # Profit level to stop starting new accounts
 STEP_PROFIT = 100
 
 # --- Drawdown triggers ---
-USE_DD_TRIGGER = True
-START_DD_THRESHOLD = 100  # DD trigger to start next account
+USE_DD_TRIGGER = False
+START_DD_THRESHOLD = 500  # DD trigger to start next account
 END_DD_THRESHOLD = 3000    # DD level to stop starting new accounts
 STEP_DD = 100
-USE_RECOVERY = False
+USE_RECOVERY = True     # MUST BE TRUE FOR DD TRIGGER AND FALSE FOR TIME TRIGGER
 
 # --- Time-based start trigger ---
-USE_TIME_TRIGGER = False
-START_EVERY_N_DAYS_THRESHOLD = 10
-END_EVERY_N_DAYS_THRESHOLD = 100
+USE_TIME_TRIGGER = True
+START_EVERY_N_DAYS_THRESHOLD = 30
+END_EVERY_N_DAYS_THRESHOLD = 90
 STEP_DAYS = 5
 
 # --- Optimization ranges ---
