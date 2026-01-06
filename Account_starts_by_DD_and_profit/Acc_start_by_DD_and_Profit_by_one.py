@@ -10,8 +10,8 @@ pd.set_option('display.max_rows', 2000)         # Show max 100 rows when printin
 pd.set_option('display.max_columns', 10)       # Show max 50 columns when printing
 
 # CSV_PATH = "../CSVS/all_times_14_flat_ONLY_PNL.csv"
-CSV_PATH = "../CSVS/premarket_only.csv"
-# CSV_PATH = "../CSVS/all_times_14_flat.csv"
+# CSV_PATH = "../CSVS/premarket_only.csv"
+CSV_PATH = "../CSVS/all_times_14_flat.csv"
 START_CAPITAL = 1500
 
 # --- Drawdown settings ---
@@ -24,21 +24,29 @@ REQUIRE_DD_STABLE = False   # require DD to not make new lows in lookback period
 
 
 # --- Date range filter (set to None to disable) ---
-START_DATE = None
-# START_DATE = "2024-09-01"
+# START_DATE = None
+START_DATE = "2020-04-01"
 # END_DATE = "2020-04-01"
 # START_DATE = "2020-01-01"
 # END_DATE = "2021-01-20"
 END_DATE = None
 
+# ==================================================================
 # --- New account start triggers ---
-MAX_ACCOUNTS = 100
-START_IF_DD_THRESHOLD = 100000  # DD trigger to start next account
-START_IF_PROFIT_THRESHOLD = 3000    # Profit trigger to start next account (set too high to disable)
+MAX_ACCOUNTS = 20
+
+# --- Profit triggers ---
+USE_PROFIT_TRIGGER = False
+START_IF_PROFIT_THRESHOLD = 1000    # Profit trigger to start next account (set too high to disable)
+
+# --- Drawdown triggers ---
+USE_DD_TRIGGER = False
+START_IF_DD_THRESHOLD = 400  # DD trigger to start next account
 
 # --- Time-based trigger ---
 USE_TIME_TRIGGER = True
 TIME_TRIGGER_DAYS = 30    # start new account every N days
+# ==================================================================
 
 RECOVERY_LEVEL = 0   # require DD to recover above this value before next account can start
 MIN_DAYS_BETWEEN_STARTS = 1  # minimum days between starting new accounts
@@ -50,7 +58,6 @@ SHOW_DD_PLOT = True
 # ======================
 #  FUNCTIONS
 # ======================
-
 
 def calculate_max_drawdown(equity):
     """Calculate maximum drawdown of an equity series."""
@@ -94,9 +101,16 @@ def print_config():
         print(f"END_DATE: {END_DATE}")
 
     print(f"MAX_ACCOUNTS: {MAX_ACCOUNTS}")
-    print(f"START_IF_DD_THRESHOLD: {START_IF_DD_THRESHOLD}")
-    print(f"START_IF_PROFIT_THRESHOLD: {START_IF_PROFIT_THRESHOLD}")
-    print(f"RECOVERY_LEVEL: {RECOVERY_LEVEL}")
+    if USE_DD_TRIGGER:
+        print(f"START_IF_DD_THRESHOLD: {START_IF_DD_THRESHOLD}")
+    else:
+        print("START_IF_DD_THRESHOLD: disabled")
+
+    if USE_PROFIT_TRIGGER:
+        print(f"START_IF_PROFIT_THRESHOLD: {START_IF_PROFIT_THRESHOLD}")
+    else:
+        print("START_IF_PROFIT_THRESHOLD: disabled")
+    print(f"RECOVERY_LEVEL: {RECOVERY_LEVEL} (must recover above this value before new account start)")
     print(f"MIN_DAYS_BETWEEN_STARTS: {MIN_DAYS_BETWEEN_STARTS}")
     print(f"SHOW_PORTFOLIO_TOTAL_EQUITY: {SHOW_PORTFOLIO_TOTAL_EQUITY}")
     print("=====================")
@@ -216,42 +230,49 @@ def simulate_staggered_accounts(pl_series, start_capital, max_accounts):
         if len(accounts) < max_accounts:
 
             # Build drawdown list from alive accounts
-            active_dds = [acc['drawdown'] for acc in accounts
-                          if acc['alive'] and acc['start_idx'] <= i_date]
-
+            active_dds = [
+                acc['drawdown'] for acc in accounts
+                if acc['alive'] and acc['start_idx'] <= i_date
+            ]
             current_dd = min(active_dds) if active_dds else 0
 
             global_dd_now = dd_series.iloc[i_date]
             global_dd_recent_min = dd_rolling_min.iloc[i_date - 1] if i_date > 0 else 0
-
             dd_not_making_new_lows = global_dd_now >= global_dd_recent_min
 
-            # ===== START LOGIC =====
-            if waiting_for_recovery:
-                can_start = False
+            can_start = False
+            started_due_to_dd = False
 
-                # Enough recovery?
+            # =============================
+            #  RECOVERY GATE (DD only)
+            # =============================
+            if waiting_for_recovery and USE_DD_TRIGGER:
                 if current_dd >= RECOVERY_LEVEL:
                     waiting_for_recovery = False
+                else:
+                    can_start = False
 
+            # =============================
+            #  TRIGGER EVALUATION
+            # =============================
+            if not waiting_for_recovery:
 
-            else:
                 trigger_dd = False
                 trigger_profit = False
                 trigger_time = False
 
                 # --- DD TRIGGER ---
-                if START_IF_DD_THRESHOLD is not None:
-                    if current_dd <= -1 * START_IF_DD_THRESHOLD:
+                if USE_DD_TRIGGER and START_IF_DD_THRESHOLD is not None:
+                    if current_dd <= -START_IF_DD_THRESHOLD:
                         trigger_dd = True
+                        started_due_to_dd = True
 
                 # --- PROFIT TRIGGER ---
-                if START_IF_PROFIT_THRESHOLD is not None:
+                if USE_PROFIT_TRIGGER and START_IF_PROFIT_THRESHOLD is not None:
                     alive_accounts = [acc for acc in accounts if acc['alive']]
                     if alive_accounts:
                         last_alive = alive_accounts[-1]
-                        acc_profit_since_start = last_alive['equity'] - start_capital
-                        if acc_profit_since_start >= START_IF_PROFIT_THRESHOLD:
+                        if last_alive['equity'] - start_capital >= START_IF_PROFIT_THRESHOLD:
                             trigger_profit = True
                     else:
                         trigger_profit = True
@@ -268,22 +289,21 @@ def simulate_staggered_accounts(pl_series, start_capital, max_accounts):
                     else:
                         can_start = True
 
-                else:
-                    can_start = False
-
-            # ---- Time-based guard ----
+            # =============================
+            #  ACCOUNT START
+            # =============================
             if can_start and (i_date - last_start_day) >= MIN_DAYS_BETWEEN_STARTS:
-                new_acc = {
+                accounts.append({
                     'start_idx': i_date,
                     'equity': start_capital,
                     'rolling_max': start_capital,
                     'drawdown': 0.0,
                     'alive': True
-                }
-                accounts.append(new_acc)
+                })
                 last_start_day = i_date
-                waiting_for_recovery = True   # require recovery before next start
-                # next_threshold_idx += 1
+
+                # Recovery applies ONLY if started due to DD
+                waiting_for_recovery = USE_DD_TRIGGER and started_due_to_dd
 
     # Convert to pandas
     portfolio_eq_series = pd.Series(portfolio_equity, index=dates)

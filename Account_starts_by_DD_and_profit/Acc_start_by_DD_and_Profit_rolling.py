@@ -6,7 +6,7 @@ import numpy as np
 # ========================================================================================
 pd.set_option('display.min_rows', 1000)         # Show min 1000 rows when printing
 pd.set_option('display.max_rows', 2000)         # Show max 100 rows when printing
-pd.set_option('display.max_columns', 10)       # Show max 50 columns when printing
+pd.set_option('display.max_columns', None)       # Show max 50 columns when printing
 
 # CSV_PATH = "../CSVS/all_times_14_flat_ONLY_PNL.csv"
 CSV_PATH = "../CSVS/premarket_only.csv"
@@ -29,12 +29,13 @@ START_DATE = None
 # END_DATE = "2021-01-20"
 END_DATE = None
 
+# ==================================================================
 # --- New account start triggers ---
 MAX_ACCOUNTS = 100
-# ==================================================================
+
 # --- Profit triggers ---
-USE_PROFIT_TRIGGER = False
-START_PROFIT_THRESHOLD = 3000    # Profit trigger to start next account
+USE_PROFIT_TRIGGER = True
+START_PROFIT_THRESHOLD = 1000    # Profit trigger to start next account
 END_PROFIT_THRESHOLD = 5000   # Profit level to stop starting new accounts
 STEP_PROFIT = 100
 
@@ -46,11 +47,11 @@ STEP_DD = 100
 USE_RECOVERY = True     # MUST BE TRUE FOR DD TRIGGER AND FALSE FOR TIME TRIGGER
 
 # --- Time-based start trigger ---
-USE_TIME_TRIGGER = True
+USE_TIME_TRIGGER = False
 START_EVERY_N_DAYS_THRESHOLD = 30
 END_EVERY_N_DAYS_THRESHOLD = 90
 STEP_DAYS = 5
-
+# ==================================================================
 # --- Optimization ranges ---
 PROFIT_RANGE = range(START_PROFIT_THRESHOLD, END_PROFIT_THRESHOLD + STEP_PROFIT, STEP_PROFIT)
 DD_RANGE = range(START_DD_THRESHOLD, END_DD_THRESHOLD + STEP_DD, STEP_DD)
@@ -114,7 +115,7 @@ def print_config():
         print(f"START_IF_PROFIT_THRESHOLD: {START_PROFIT_THRESHOLD}")
     else:
         print("START_IF_PROFIT_THRESHOLD: Disabled")
-    print(f"RECOVERY_LEVEL: {RECOVERY_LEVEL}")
+    print(f"RECOVERY_LEVEL: {RECOVERY_LEVEL} (must recover above this value before new account start)")
     print(f"MIN_DAYS_BETWEEN_STARTS: {MIN_DAYS_BETWEEN_STARTS}")
     print("=====================")
     if REQUIRE_DD_STABLE:

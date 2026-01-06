@@ -11,8 +11,8 @@ from datetime import time
 pd.set_option('display.max_rows', 500)
 
 # Filter to pre-market trades only (1:00 - 10:00)
-PREMARKET_START = time(0, 0)
-PREMARKET_END = time(23, 59)
+PREMARKET_START = time(1, 0)
+PREMARKET_END = time(10, 00)
 
 SAVE_FILES = False   # save output CSV files
 
