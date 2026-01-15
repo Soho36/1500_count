@@ -8,20 +8,27 @@ from datetime import time
 # =================================================================================================
 
 # Display number of rows in DataFrame outputs
-pd.set_option('display.max_rows', 500)
+pd.set_option('display.max_rows', None)
+# pd.set_option('display.max_columns', 20)
 
-# Filter to pre-market trades only (1:00 - 10:00)
-PREMARKET_START = time(1, 0)
-PREMARKET_END = time(10, 00)
+# Enable time filtering
+ENTRY_TIME_FILTER = True
+
+ENTRY_START_TIME = time(11, 0)
+ENTRY_END_TIME = time(23, 59)
 
 SAVE_FILES = False   # save output CSV files
+
+SURVIVAL_CURVE_PLOT = False  # plot survival curve chart
+HAZARD_RATE_PLOT = False  # plot hazard rate chart
+EXPECTED_REMAINING_DD_PLOT = False  # plot expected remaining DD duration chart
 
 
 # =================================================================================================
 #  LOAD & CLEAN DATA
 # =================================================================================================
 try:
-    input_path = "../CSVS/time_shifted_trade_stats_1_minute.csv"  # input file from MT5 strategy tester
+    input_path = "../CSVS/time_shifted_trade_stats_goodtimewindows.csv"  # input file from MT5 strategy tester
     df = pd.read_csv(input_path, sep="\t")
 
     for col in ["MAE", "MFE", "PNL"]:
@@ -48,12 +55,17 @@ df["Date"] = df["Entry_time"].dt.date
 # extract time
 df["Entry_clock"] = df["Entry_time"].dt.time
 
-df = df[
-    (df["Entry_clock"] >= PREMARKET_START) &
-    (df["Entry_clock"] < PREMARKET_END)
-].copy()
+if ENTRY_TIME_FILTER:
+    print(f"Applying time filter: {ENTRY_START_TIME} to {ENTRY_END_TIME}")
+    df = df[
+        (df["Entry_clock"] >= ENTRY_START_TIME) &
+        (df["Entry_clock"] < ENTRY_END_TIME)
+        ].copy()
+    print(f"Filtered by time DF: {df.head(1000)}")
+else:
+    print("No time filtering applied.")
+    print(f"Full DF: {df}")
 
-print(f"Filtered by time DF: {df}")
 
 # =================================================================================================
 # MAE / MFE LOGIC
@@ -284,7 +296,7 @@ for t in timeline:
 hazard_df = pd.DataFrame(hazard_rows)
 
 hazard_df["Support"] = hazard_df["At_Risk"]
-hazard_clean = hazard_df[hazard_df["Support"] >= 10]
+hazard_clean = hazard_df[hazard_df["Support"] >= 10].copy()
 hazard_clean["Hazard_SMA"] = hazard_clean["Hazard"].rolling(5, min_periods=3).mean()
 
 
@@ -308,11 +320,12 @@ So if your current DD = 20 days →
 You’re in the worst 8% historically.
 """
 
-plt.step(surv_df["Days"], surv_df["Survival_Prob"], where="post")
-plt.xlabel("Days in Drawdown")
-plt.ylabel("P(DD not recovered)")
-plt.title("Drawdown Survival Curve")
-plt.grid(True)
+if SURVIVAL_CURVE_PLOT:
+    plt.step(surv_df["Days"], surv_df["Survival_Prob"], where="post")
+    plt.xlabel("Days in Drawdown")
+    plt.ylabel("P(DD not recovered)")
+    plt.title("Drawdown Survival Curve")
+    plt.grid(True)
 
 
 # ============================================
@@ -345,27 +358,29 @@ Mean reversion in time
 Rare but excellent
 🚀 Very robust strategy
 """
-plt.figure(figsize=(10, 4))
-plt.plot(hazard_clean["Days"], hazard_clean["Hazard"], marker="o")
-plt.xlabel("Days in Drawdown")
-plt.ylabel("P(Recovery tomorrow)")
-plt.title("Drawdown Recovery Hazard Rate")
-plt.grid(True)
+if HAZARD_RATE_PLOT:
+    plt.figure(figsize=(10, 4))
+    plt.plot(hazard_clean["Days"], hazard_clean["Hazard"], marker="o")
+    plt.xlabel("Days in Drawdown")
+    plt.ylabel("P(Recovery tomorrow)")
+    plt.title("Drawdown Recovery Hazard Rate")
+    plt.grid(True)
 
 # ============================================
 # Expected remaining DD duration plot
 # ============================================
 
-plt.figure(figsize=(10, 4))
-plt.plot(
-    exp_df["Days_In_DD"],
-    exp_df["Expected_Remaining_Days"],
-    linewidth=2
-)
-plt.xlabel("Days already in Drawdown")
-plt.ylabel("Expected remaining DD days")
-plt.title("Expected Remaining Drawdown Duration")
-plt.grid(True)
+if EXPECTED_REMAINING_DD_PLOT:
+    plt.figure(figsize=(10, 4))
+    plt.plot(
+        exp_df["Days_In_DD"],
+        exp_df["Expected_Remaining_Days"],
+        linewidth=2
+    )
+    plt.xlabel("Days already in Drawdown")
+    plt.ylabel("Expected remaining DD days")
+    plt.title("Expected Remaining Drawdown Duration")
+    plt.grid(True)
 
 
 # ============================================
