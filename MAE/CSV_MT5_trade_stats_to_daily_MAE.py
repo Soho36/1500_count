@@ -12,10 +12,10 @@ pd.set_option('display.max_rows', None)
 # pd.set_option('display.max_columns', 20)
 
 # Enable time filtering
-ENTRY_TIME_FILTER = True
+ENTRY_TIME_FILTER = False
 
-ENTRY_START_TIME = time(11, 0)
-ENTRY_END_TIME = time(23, 59)
+ENTRY_START_TIME = time(1, 0)
+ENTRY_END_TIME = time(23, 30)
 
 SAVE_FILES = False   # save output CSV files
 
@@ -28,7 +28,7 @@ EXPECTED_REMAINING_DD_PLOT = False  # plot expected remaining DD duration chart
 #  LOAD & CLEAN DATA
 # =================================================================================================
 try:
-    input_path = "../CSVS/time_shifted_trade_stats_goodtimewindows.csv"  # input file from MT5 strategy tester
+    input_path = "../CSVS/trade_stats_NO_DST_GOOD_and_OK.csv"  # input file from MT5 strategy tester
     df = pd.read_csv(input_path, sep="\t")
 
     for col in ["MAE", "MFE", "PNL"]:
