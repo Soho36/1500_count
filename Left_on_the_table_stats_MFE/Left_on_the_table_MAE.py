@@ -6,7 +6,7 @@ import numpy as np
 # ==============================
 pd.set_option('display.max_rows', None)      # Show all rows when printing DataFrames
 # path = (r"C:\Users\Vova deduskin lap\AppData\Roaming\MetaQuotes\Tester\870072DB5DBAB61841BAE146AFAAFB8A"
-#         r"\Agent-127.0.0.1-3000\MQL5\Files\trade_stats.csv")
+#         r"\Agent-127.0.0.1-3000\MQL5\Files\nodst.csv")
 path = (r"C:\Users\Liikurserv\AppData\Roaming\MetaQuotes\Tester\F5855995045EF8A4C3CA7AE968872CF2"
         r"\Agent-127.0.0.1-3000\MQL5\Files\trade_stats.csv")
 
