@@ -3,3 +3,13 @@
 /all_times_14_flat/
 /premarket_only/
 /all_times_14_flat_50_range/
+/Normalize_MT5_server_time_to_DST/MNQ_merged_no_spread.csv
+/venv64/
+/Optimization_analysis/input_files_time_windows/
+/Optimization_analysis/month_filtered_results/
+/Optimization_analysis/processed_files/
+/Normalize_MT5_server_time_to_DST/MNQ_merged_no_spread_DST_adjusted.csv
+/Merge_DST_no_DST_reports/dst.csv
+/Merge_DST_no_DST_reports/nodst.csv
+/MAE/all_good_and_bad_premarket.csv
+/MAE/only_good_windows_dst_nodst_premarket.csv
