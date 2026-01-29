@@ -5,20 +5,20 @@ import numpy as np
 # CONFIG
 # =========================
 
-FILE_PATH = "0130 0200.csv"   # or .xlsx
+FILE_PATH = "feb_all_runs.xlsx"  # or .xlsx
 MIN_PROFIT = 0
-MIN_TRADES = 30
-MAX_DD = 20
+MIN_TRADES = 10
+MAX_DD = 10
 MIN_PF = 1.1
-MIN_SHARPE = 5
-MIN_ACTIVE_MONTHS = 2
+MIN_SHARPE = 1
+MIN_ACTIVE_MONTHS = 0   # Set to 0 to ignore this filter
 
 # Composite score weights (must sum to 1)
 WEIGHTS = {
-    "Sharpe": 0.20,
-    "PF": 0.25,
-    "Recovery": 0.20,
-    "ExpectedPayoff": 0.15,
+    "Sharpe": 0.25,
+    "PF": 0.20,
+    "Recovery": 0.15,
+    "ExpectedPayoff": 0.30,
     "DD": 0.10
 }
 
@@ -67,9 +67,11 @@ if filtered.empty:
 # PERCENTILE NORMALIZATION
 # =========================
 
+
 def pct_rank(series, higher_is_better=True):
     r = series.rank(pct=True)
     return r if higher_is_better else 1 - r
+
 
 filtered["Sharpe_rank"] = pct_rank(filtered["Sharpe Ratio"], True)
 filtered["PF_rank"] = pct_rank(filtered["Profit Factor"], True)
@@ -92,6 +94,7 @@ filtered["Score"] = (
 # =========================
 # PARETO FRONT (PF↑, Sharpe↑, DD↓)
 # =========================
+
 
 def pareto_front(df, maximize_cols, minimize_cols):
     is_pareto = np.ones(len(df), dtype=bool)
@@ -121,6 +124,7 @@ def pareto_front(df, maximize_cols, minimize_cols):
                 break
 
     return df[is_pareto]
+
 
 pareto = pareto_front(
     filtered,
@@ -154,4 +158,4 @@ cols_to_show = [
 print("\nTOP CANDIDATE RUNS:\n")
 print(final[cols_to_show])
 
-final.to_csv("selected_runs.csv", index=False)
+final.to_excel("script_selected_runs_G.xlsx", index=False)
