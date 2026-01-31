@@ -2,8 +2,8 @@ import pandas as pd
 import os
 import glob
 
-input_dir = "../Optimization_analysis/processed_files"  # folder with xlsx files
-output_root = "../Optimization_analysis/month_filtered_results"
+input_dir = "../Optimization_analysis/optimization_results_from_mt5_time_windows/"  # folder with xlsx files
+output_root = "../Optimization_analysis/optimization_results_from_mt5_time_windows/res"
 os.makedirs(output_root, exist_ok=True)
 
 # Define the month columns in order for sorting
@@ -29,7 +29,7 @@ month_order = {month: i for i, month in enumerate(month_columns)}
 all_merged_data = []
 
 # Process file by file
-for input_file_path in glob.glob(os.path.join(input_dir, "*.xlsx")):
+for input_file_path in glob.glob(os.path.join(input_dir, "*.xls")):
     input_file_name = os.path.basename(input_file_path)
 
     print(f"\nProcessing {input_file_name}")
