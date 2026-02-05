@@ -28,7 +28,7 @@ EXPECTED_REMAINING_DD_PLOT = False  # plot expected remaining DD duration chart
 #  LOAD & CLEAN DATA
 # =================================================================================================
 try:
-    input_path = "only_good_windows_dst_nodst_premarket.csv"  # input file from MT5 strategy tester
+    input_path = "trade_stats_long_premarket.csv"  # input file from MT5 strategy tester
     df = pd.read_csv(input_path, sep="\t")
 
     for col in ["MAE", "MFE", "PNL"]:
@@ -155,7 +155,7 @@ plot_df["DD_Closed"] = plot_df["Equity"] - plot_df["Closed_Peak"]
 
 #   MAX DD STATISTICS
 print("Max closed DD:", plot_df["DD_Closed"].min())
-print("Max floating DD:", plot_df["DD_Floating"].min())
+print("Max Peak to valley DD:", plot_df["DD_Floating"].min())
 print("Final PNL:", plot_df["Equity"].iloc[-1])
 
 # Aggregate to daily
