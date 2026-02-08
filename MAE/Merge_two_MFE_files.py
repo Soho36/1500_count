@@ -57,7 +57,7 @@ def merge_trade_files_robust(file1_path, file2_path, output_path):
 if __name__ == "__main__":
     # For direct script usage
     merge_trade_files_robust(
-        "trade_stats_long_premarket.csv",
-        "trade_stats_short_premarket.csv",
-        "longs_shorts_merged_trades_premarket.csv"
+        "GG_all_times.csv",
+        "RG_all_times.csv",
+        "Merged_GG_RG_all_times.csv"
     )
