@@ -10,7 +10,7 @@ pd.set_option('display.max_rows', 2000)         # Show max 100 rows when printin
 pd.set_option('display.max_columns', 10)       # Show max 50 columns when printing
 
 # CSV_PATH = "../CSVS/all_times_14_flat_ONLY_PNL.csv"
-CSV_PATH = "../CSVS/premarket_only.csv"
+CSV_PATH = "../MAE/RG_premarket_till_10.csv"
 # CSV_PATH = "../CSVS/all_times_14_flat.csv"
 START_CAPITAL = 1500
 
@@ -133,27 +133,36 @@ except Exception as e:
     print("Error loading CSV file:".upper(), e)
     exit(1)
 
-df["P.L"] = df["P.L"].astype(str).str.replace(",", ".").str.strip()
-df["P.L"] = pd.to_numeric(df["P.L"], errors='coerce').fillna(0)
+# Convert PNL column to numeric, handling different separators
+df["PNL"] = df["PNL"].astype(str).str.replace(",", ".").str.strip()
+df["PNL"] = pd.to_numeric(df["PNL"], errors='coerce').fillna(0)
 
-df["Date"] = pd.to_datetime(df["Date"], dayfirst=True)
+# Extract date from exit_time (or entry_time - whichever you prefer)
+# Using exit_time as that's when the trade is completed
+df["Date"] = pd.to_datetime(df["Exit_time"]).dt.date
 
-# Keep only the necessary columns
-df = df[["Date", "P.L"]].dropna()
+# Group by date to get daily P&L
+daily_pnl = df.groupby("Date")["PNL"].sum()
+
+# Convert back to dataframe with Date as column
+daily_df = daily_pnl.reset_index()
+daily_df["Date"] = pd.to_datetime(daily_df["Date"])
 
 # Filter by date range
 if START_DATE:
-    df = df[df["Date"] >= pd.to_datetime(START_DATE)]
+    daily_df = daily_df[daily_df["Date"] >= pd.to_datetime(START_DATE)]
 if END_DATE:
-    df = df[df["Date"] <= pd.to_datetime(END_DATE)]
+    daily_df = daily_df[daily_df["Date"] <= pd.to_datetime(END_DATE)]
 
-df = df.sort_values("Date").reset_index(drop=True)
+daily_df = daily_df.sort_values("Date").reset_index(drop=True)
 
-print("Date range:", df["Date"].min(), "→", df["Date"].max())
-print("Total rows:", len(df))
+print("Date range:", daily_df["Date"].min(), "→", daily_df["Date"].max())
+print("Total trading days:", len(daily_df))
+print("Total trades:", len(df))
+print("Average trades per day:", round(len(df) / len(daily_df), 2))
 
-# P.L series
-pl = df.set_index("Date")["P.L"]
+# P.L series (daily aggregated)
+pl = daily_df.set_index("Date")["PNL"]
 
 # Original equity curve
 equity_original = START_CAPITAL + pl.cumsum()
@@ -325,7 +334,7 @@ portfolio_eq, acc_eq_df, num_alive = simulate_staggered_accounts(pl, START_CAPIT
 if SHOW_DD_PLOT:
     plt.figure(figsize=(10, 5))
     plt.fill_between(dd_series.index, dd_series.values, 0, step="mid", color="blue")
-    plt.title("Closed equity drawdown")
+    plt.title("Closed Equity Drawdown")
     plt.ylabel("Drawdown")
     plt.grid(True)
     plt.tight_layout()
