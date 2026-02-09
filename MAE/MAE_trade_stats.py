@@ -28,7 +28,7 @@ EXPECTED_REMAINING_DD_PLOT = False  # plot expected remaining DD duration chart
 #  LOAD & CLEAN DATA
 # =================================================================================================
 try:
-    input_path = "RG_premarket_till_10.csv"  # input file from MT5 strategy tester
+    input_path = "RG_all_times_pickedwin_range.csv"  # input file from MT5 strategy tester
     df = pd.read_csv(input_path, sep="\t")
 
     for col in ["MAE", "MFE", "PNL"]:
