@@ -21,13 +21,13 @@ DD_LOOKBACK = 10  # days to check for new lows
 REQUIRE_DD_STABLE = False  # require DD to not make new lows in lookback period before starting new account
 
 # --- Date range filter (set to None to disable) ---
-START_DATE = None
+START_DATE = "2025-01-01"
 END_DATE = None
 
 # ==================================================================
 # --- New account start triggers ---
 # ==================================================================
-MAX_ACCOUNTS = 20
+MAX_ACCOUNTS = 100  # maximum number of accounts to start (set to high number to disable)
 
 # --- Time-based trigger ---
 USE_TIME_TRIGGER = True
@@ -432,6 +432,7 @@ def simulate_staggered_accounts(pl_series, start_capital, max_accounts, use_prop
             if can_start and (i_date - last_start_day) >= MIN_DAYS_BETWEEN_STARTS:
                 accounts.append({
                     'start_idx': i_date,
+                    'start_date': dates[i_date],
                     'equity': start_capital,
                     'rolling_max': start_capital,
                     'drawdown': 0.0,
@@ -610,13 +611,15 @@ print(f"{'Success Rate:':<30} {(number_accounts_alive / number_accounts_started 
 print("\n" + "-" * 60)
 print("ACCOUNT PERFORMANCE SUMMARY")
 print("-" * 60)
-print(f"{'Account':<10} {'Status':<10} {'Start Equity':<15} {'End Equity':<15} {'P&L':<15} {'Return %':<10}")
+print(f"{'Account':<10} {'Date':<10} {'Status':<10} {'Start Equity':<15} {'End Equity':<15} {'P&L':<15} {'Return %':<10}")
 print("-" * 60)
 
 for i in range(number_accounts_started):
     acc_col = f"acc_{i + 1}"
     if i < len(acc_eq_df.columns):
         start_val = START_CAPITAL
+        start_date = acc_eq_df[acc_col].first_valid_index()
+        start_date = start_date.date()
         end_val = acc_eq_df[acc_col].dropna().iloc[-1]
         pnl = end_val - start_val
         return_pct = (pnl / start_val) * 100
@@ -631,7 +634,7 @@ for i in range(number_accounts_started):
         else:
             status = "NEUTRAL"
 
-        print(f"{i + 1:<10} {status:<10} ${start_val:<14,.0f} ${end_val:<14,.0f} ${pnl:<14,.0f} {return_pct:<9.1f}%")
+        print(f"{i + 1:<10} {str(start_date): <12} {status:<10} ${start_val:<14,.0f} ${end_val:<14,.0f} ${pnl:<14,.0f} {return_pct:<9.1f}%")
 
 print("=" * 60)
 
