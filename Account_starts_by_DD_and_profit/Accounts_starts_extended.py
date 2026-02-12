@@ -1,6 +1,8 @@
 import pandas as pd
 import matplotlib.pyplot as plt
 import numpy as np
+import matplotlib.dates as mdates
+from matplotlib.ticker import FuncFormatter
 
 # ========================================================================================
 #  CONFIG
@@ -9,7 +11,7 @@ pd.set_option('display.min_rows', 1000)  # Show min 1000 rows when printing
 pd.set_option('display.max_rows', 2000)  # Show max 100 rows when printing
 pd.set_option('display.max_columns', 10)  # Show max 50 columns when printing
 
-CSV_PATH = "../MAE/Merged_GG_RG_all_times.csv"
+CSV_PATH = "../MAE/RG_premarket_till_10_h1.csv"  # path to your CSV file
 START_CAPITAL = 1500
 
 # --- Drawdown settings ---
@@ -21,7 +23,7 @@ DD_LOOKBACK = 10  # days to check for new lows
 REQUIRE_DD_STABLE = False  # require DD to not make new lows in lookback period before starting new account
 
 # --- Date range filter (set to None to disable) ---
-START_DATE = "2025-01-01"
+START_DATE = None
 END_DATE = None
 
 # ==================================================================
@@ -41,13 +43,12 @@ START_IF_PROFIT_THRESHOLD = 1000  # Profit trigger to start next account (set to
 USE_DD_TRIGGER = False
 START_IF_DD_THRESHOLD = 400  # DD trigger to start next account
 
-
 # ==================================================================
 
-RECOVERY_LEVEL = 0  # require DD to recover above this value before next account can start
+RECOVERY_LEVEL = 0  # require DD to recover above this value before new account can start
 MIN_DAYS_BETWEEN_STARTS = 1  # minimum days between starting new accounts
 
-SHOW_PORTFOLIO_TOTAL_EQUITY = False  # if True, show total equity of all accounts combined
+SHOW_PORTFOLIO_TOTAL_EQUITY = True  # if True, show total equity of all accounts combined
 SHOW_DD_PLOT = True
 USE_PROP_STYLE_DD = True  # Set to True to use floating/prop-style DD, False for closed equity DD
 
@@ -416,7 +417,7 @@ def simulate_staggered_accounts(pl_series, start_capital, max_accounts, use_prop
 
                 # --- TIME TRIGGER ---
                 if USE_TIME_TRIGGER:
-                    if (i_date - last_start_day) >= TIME_TRIGGER_DAYS:
+                    if (dates[i_date] - dates[last_start_day]).days >= TIME_TRIGGER_DAYS:
                         trigger_time = True
 
                 # --- Combined logic ---
@@ -495,7 +496,6 @@ axes[1].set_ylabel("PNL")
 axes[1].grid(True)
 axes[1].legend()
 
-
 # ============================================
 # 3) Floating DD
 # ============================================
@@ -506,7 +506,6 @@ axes[2].set_xlabel("Date")
 axes[2].set_ylabel("PNL")
 axes[2].grid(True)
 axes[2].legend()
-
 
 plt.tight_layout()
 
@@ -533,7 +532,6 @@ if SHOW_PORTFOLIO_TOTAL_EQUITY:
     plt.setp(ax_portfolio.xaxis.get_majorticklabels(), rotation=45)
     plt.tight_layout()
 
-
 # ======================
 # INDIVIDUAL ACCOUNTS PLOT
 # ======================
@@ -555,11 +553,10 @@ ax_accounts.set_title("Individual Accounts Equity")
 ax_accounts.set_ylabel("Equity ($)")
 ax_accounts.set_xlabel("Date")
 ax_accounts.grid(True, alpha=0.3)
-ax_accounts.legend(loc="upper left", fontsize="small")
+# ax_accounts.legend(loc="upper left", fontsize="small")
 
 plt.setp(ax_accounts.xaxis.get_majorticklabels(), rotation=45)
 plt.tight_layout()
-
 
 # ======================
 #  ADDITIONAL PLOT: ACCOUNT STATUS OVER TIME
@@ -590,16 +587,251 @@ ax5.legend(loc='upper left')
 plt.setp(ax5.xaxis.get_majorticklabels(), rotation=45)
 plt.tight_layout()
 
+# ============================================================
+# CHART 1: MONTHLY P&L (Single Account Strategy)
+# ============================================================
+
+# Create a copy of the P&L data with proper date index
+if USE_PROP_STYLE_DD and 'daily_data' in locals():
+    pnl_data = daily_df.copy()
+    pnl_data.set_index('Date', inplace=True)
+else:
+    pnl_data = pl.to_frame(name='PNL_Daily')
+
+# Group by month and sum P&L
+monthly_pnl = pnl_data.resample('M')['PNL_Daily'].sum()
+
+# Create monthly P&L bar chart
+fig_monthly, ax_monthly = plt.subplots(figsize=(14, 6))
+
+# Define colors: green for positive, red for negative
+colors = ['green' if x >= 0 else 'red' for x in monthly_pnl.values]
+
+# Create bar chart
+bars = ax_monthly.bar(monthly_pnl.index, monthly_pnl.values,
+                      color=colors, alpha=0.7, edgecolor='black', linewidth=0.5)
+
+# Add a horizontal line at y=0
+ax_monthly.axhline(y=0, color='black', linewidth=0.8, alpha=0.7)
+
+# Format x-axis to show months nicely
+ax_monthly.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m'))
+ax_monthly.xaxis.set_major_locator(mdates.MonthLocator(interval=3))
+plt.setp(ax_monthly.xaxis.get_majorticklabels(), rotation=45)
+
+# Add value labels on top of bars
+for bar in bars:
+    height = bar.get_height()
+    if height >= 0:
+        label_position = height + (monthly_pnl.max() * 0.01)
+    else:
+        label_position = height - (monthly_pnl.max() * 0.01)
+
+    ax_monthly.text(bar.get_x() + bar.get_width() / 2., label_position,
+                    f'${height:,.0f}',
+                    ha='center', va='bottom' if height >= 0 else 'top',
+                    fontsize=8, rotation=45)
+
+# Set titles and labels
+ax_monthly.set_title("Single Account Strategy - Monthly P&L", fontsize=14, fontweight='bold')
+ax_monthly.set_ylabel("P&L ($)")
+ax_monthly.set_xlabel("Date")
+ax_monthly.grid(True, alpha=0.3, axis='y')
+
+# Add summary statistics
+total_pnl = monthly_pnl.sum()
+positive_months = (monthly_pnl > 0).sum()
+negative_months = (monthly_pnl < 0).sum()
+win_rate = positive_months / len(monthly_pnl) * 100
+
+textstr = f'Total: ${total_pnl:,.0f} | Win Rate: {win_rate:.1f}% ({positive_months}/{len(monthly_pnl)})'
+ax_monthly.text(0.02, 0.98, textstr, transform=ax_monthly.transAxes,
+                fontsize=10, verticalalignment='top',
+                bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.5))
+
+plt.tight_layout()
+
+# ============================================================
+# CHART 2: YEARLY P&L (Single Account Strategy)
+# ============================================================
+
+# Group by year and sum P&L
+yearly_pnl = pnl_data.resample('Y')['PNL_Daily'].sum()
+
+# Create yearly P&L bar chart
+fig_yearly, ax_yearly = plt.subplots(figsize=(12, 6))
+
+# Define colors: green for positive, red for negative
+colors = ['green' if x >= 0 else 'red' for x in yearly_pnl.values]
+
+# Create bar chart
+bars = ax_yearly.bar(yearly_pnl.index.year, yearly_pnl.values,
+                     color=colors, alpha=0.7, edgecolor='black', linewidth=0.8, width=0.6)
+
+# Add a horizontal line at y=0
+ax_yearly.axhline(y=0, color='black', linewidth=0.8, alpha=0.7)
+
+# Add value labels on top of bars
+for bar in bars:
+    height = bar.get_height()
+    if height >= 0:
+        label_position = height + (yearly_pnl.max() * 0.02)
+    else:
+        label_position = height - (yearly_pnl.max() * 0.02)
+
+    ax_yearly.text(bar.get_x() + bar.get_width() / 2., label_position,
+                   f'${height:,.0f}',
+                   ha='center', va='bottom' if height >= 0 else 'top',
+                   fontsize=10, fontweight='bold')
+
+# Set titles and labels
+ax_yearly.set_title("Single Account Strategy - Yearly P&L", fontsize=14, fontweight='bold')
+ax_yearly.set_ylabel("P&L ($)")
+ax_yearly.set_xlabel("Year")
+ax_yearly.grid(True, alpha=0.3, axis='y')
+
+# Add summary statistics
+total_pnl_yearly = yearly_pnl.sum()
+avg_yearly = yearly_pnl.mean()
+positive_years = (yearly_pnl > 0).sum()
+negative_years = (yearly_pnl < 0).sum()
+win_rate_yearly = positive_years / len(yearly_pnl) * 100 if len(yearly_pnl) > 0 else 0
+
+textstr = f'Total: ${total_pnl_yearly:,.0f} | Avg: ${avg_yearly:,.0f} | Win Rate: {win_rate_yearly:.1f}% ({positive_years}/{len(yearly_pnl)})'
+ax_yearly.text(0.02, 0.98, textstr, transform=ax_yearly.transAxes,
+               fontsize=10, verticalalignment='top',
+               bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.5))
+
+plt.tight_layout()
+
+# ============================================================
+# NEW CHART 3: PORTFOLIO MONTHLY P&L
+# ============================================================
+
+# Calculate daily portfolio P&L from portfolio equity curve
+portfolio_daily_pnl = portfolio_eq.diff().fillna(portfolio_eq.iloc[0] - START_CAPITAL)
+portfolio_daily_pnl.name = 'Portfolio_PNL_Daily'
+
+# Group by month and sum portfolio P&L
+portfolio_monthly_pnl = portfolio_daily_pnl.resample('M').sum()
+
+# Create portfolio monthly P&L bar chart
+fig_portfolio_monthly, ax_portfolio_monthly = plt.subplots(figsize=(14, 6))
+
+# Define colors: green for positive, red for negative
+colors = ['green' if x >= 0 else 'red' for x in portfolio_monthly_pnl.values]
+
+# Create bar chart
+bars = ax_portfolio_monthly.bar(portfolio_monthly_pnl.index, portfolio_monthly_pnl.values,
+                                color=colors, alpha=0.7, edgecolor='black', linewidth=0.5)
+
+# Add a horizontal line at y=0
+ax_portfolio_monthly.axhline(y=0, color='black', linewidth=0.8, alpha=0.7)
+
+# Format x-axis to show months nicely
+ax_portfolio_monthly.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m'))
+ax_portfolio_monthly.xaxis.set_major_locator(mdates.MonthLocator(interval=3))
+plt.setp(ax_portfolio_monthly.xaxis.get_majorticklabels(), rotation=45)
+
+# Add value labels on top of bars
+for bar in bars:
+    height = bar.get_height()
+    if height >= 0:
+        label_position = height + (portfolio_monthly_pnl.max() * 0.01)
+    else:
+        label_position = height - (portfolio_monthly_pnl.max() * 0.01)
+
+    ax_portfolio_monthly.text(bar.get_x() + bar.get_width() / 2., label_position,
+                              f'${height:,.0f}',
+                              ha='center', va='bottom' if height >= 0 else 'top',
+                              fontsize=8, rotation=45)
+
+# Set titles and labels
+ax_portfolio_monthly.set_title("Portfolio (All Accounts) - Monthly P&L", fontsize=14, fontweight='bold')
+ax_portfolio_monthly.set_ylabel("P&L ($)")
+ax_portfolio_monthly.set_xlabel("Date")
+ax_portfolio_monthly.grid(True, alpha=0.3, axis='y')
+
+# Add summary statistics
+portfolio_total_pnl = portfolio_monthly_pnl.sum()
+portfolio_positive_months = (portfolio_monthly_pnl > 0).sum()
+portfolio_negative_months = (portfolio_monthly_pnl < 0).sum()
+portfolio_win_rate = portfolio_positive_months / len(portfolio_monthly_pnl) * 100
+
+textstr = f'Total: ${portfolio_total_pnl:,.0f} | Win Rate: {portfolio_win_rate:.1f}% ({portfolio_positive_months}/{len(portfolio_monthly_pnl)})'
+ax_portfolio_monthly.text(0.02, 0.98, textstr, transform=ax_portfolio_monthly.transAxes,
+                          fontsize=10, verticalalignment='top',
+                          bbox=dict(boxstyle='round', facecolor='lightblue', alpha=0.5))
+
+plt.tight_layout()
+
+# ============================================================
+# NEW CHART 4: PORTFOLIO YEARLY P&L
+# ============================================================
+
+# Group by year and sum portfolio P&L
+portfolio_yearly_pnl = portfolio_daily_pnl.resample('Y').sum()
+
+# Create portfolio yearly P&L bar chart
+fig_portfolio_yearly, ax_portfolio_yearly = plt.subplots(figsize=(12, 6))
+
+# Define colors: green for positive, red for negative
+colors = ['green' if x >= 0 else 'red' for x in portfolio_yearly_pnl.values]
+
+# Create bar chart
+bars = ax_portfolio_yearly.bar(portfolio_yearly_pnl.index.year, portfolio_yearly_pnl.values,
+                               color=colors, alpha=0.7, edgecolor='black', linewidth=0.8, width=0.6)
+
+# Add a horizontal line at y=0
+ax_portfolio_yearly.axhline(y=0, color='black', linewidth=0.8, alpha=0.7)
+
+# Add value labels on top of bars
+for bar in bars:
+    height = bar.get_height()
+    if height >= 0:
+        label_position = height + (portfolio_yearly_pnl.max() * 0.02)
+    else:
+        label_position = height - (portfolio_yearly_pnl.max() * 0.02)
+
+    ax_portfolio_yearly.text(bar.get_x() + bar.get_width() / 2., label_position,
+                             f'${height:,.0f}',
+                             ha='center', va='bottom' if height >= 0 else 'top',
+                             fontsize=10, fontweight='bold')
+
+# Set titles and labels
+ax_portfolio_yearly.set_title("Portfolio (All Accounts) - Yearly P&L", fontsize=14, fontweight='bold')
+ax_portfolio_yearly.set_ylabel("P&L ($)")
+ax_portfolio_yearly.set_xlabel("Year")
+ax_portfolio_yearly.grid(True, alpha=0.3, axis='y')
+
+# Add summary statistics
+portfolio_total_pnl_yearly = portfolio_yearly_pnl.sum()
+portfolio_avg_yearly = portfolio_yearly_pnl.mean()
+portfolio_positive_years = (portfolio_yearly_pnl > 0).sum()
+portfolio_negative_years = (portfolio_yearly_pnl < 0).sum()
+portfolio_win_rate_yearly = portfolio_positive_years / len(portfolio_yearly_pnl) * 100 if len(
+    portfolio_yearly_pnl) > 0 else 0
+
+textstr = f'Total: ${portfolio_total_pnl_yearly:,.0f} | Avg: ${portfolio_avg_yearly:,.0f} | Win Rate: {portfolio_win_rate_yearly:.1f}% ({portfolio_positive_years}/{len(portfolio_yearly_pnl)})'
+ax_portfolio_yearly.text(0.02, 0.98, textstr, transform=ax_portfolio_yearly.transAxes,
+                         fontsize=10, verticalalignment='top',
+                         bbox=dict(boxstyle='round', facecolor='lightblue', alpha=0.5))
+
+plt.tight_layout()
+
+
 # quick stats
 number_accounts_started = acc_eq_df.notna().any().sum()
 number_accounts_alive = num_alive.iloc[-1]
 final_portfolio_equity = portfolio_eq.iloc[-1]
+final_pnl = final_portfolio_equity - (START_CAPITAL * max(1, number_accounts_alive))
 
 print("\n" + "=" * 60)
 print("SIMULATION RESULTS")
 print("=" * 60)
 print(f"{'DD Calculation Style:':<30} {'Prop Firm (Floating)' if USE_PROP_STYLE_DD else 'Closed Equity'}")
 print(f"{'Final Portfolio Equity:':<30} ${final_portfolio_equity:,.2f}")
+print(f"{'Final P&L:':<30} ${final_pnl:,.2f}")
 print(
     f"{'Total Return:':<30} {((final_portfolio_equity / (START_CAPITAL * max(1, number_accounts_started))) - 1) * 100:.1f}%")
 print(f"{'Num Accounts Started:':<30} {number_accounts_started}")
@@ -607,11 +839,39 @@ print(f"{'Accounts Still Alive:':<30} {number_accounts_alive}")
 print(f"{'Accounts Blown:':<30} {number_accounts_started - number_accounts_alive}")
 print(f"{'Success Rate:':<30} {(number_accounts_alive / number_accounts_started * 100):.1f}%")
 
-# Account performance summary
+# Add monthly/yearly P&L summary to console output
+print("\n" + "-" * 60)
+print("SINGLE ACCOUNT STRATEGY PERFORMANCE")
+print("-" * 60)
+print(f"{'Monthly P&L Total:':<30} ${monthly_pnl.sum():,.2f}")
+print(
+    f"{'Monthly Win Rate:':<30} {(monthly_pnl > 0).sum() / len(monthly_pnl) * 100:.1f}% ({monthly_pnl[monthly_pnl > 0].count()}/{len(monthly_pnl)})")
+print(f"{'Best Month:':<30} ${monthly_pnl.max():,.2f}")
+print(f"{'Average Month:':<30} ${monthly_pnl.mean():,.2f}")
+print(f"{'Worst Month:':<30} ${monthly_pnl.min():,.2f}")
+print(f"{'Yearly P&L Total:':<30} ${yearly_pnl.sum():,.2f}")
+print(
+    f"{'Yearly Win Rate:':<30} {(yearly_pnl > 0).sum() / len(yearly_pnl) * 100:.1f}% ({yearly_pnl[yearly_pnl > 0].count()}/{len(yearly_pnl)})")
+
+print("\n" + "-" * 60)
+print("PORTFOLIO (ALL ACCOUNTS) PERFORMANCE")
+print("-" * 60)
+print(f"{'Portfolio Monthly P&L Total:':<30} ${portfolio_monthly_pnl.sum():,.2f}")
+print(
+    f"{'Portfolio Monthly Win Rate:':<30} {(portfolio_monthly_pnl > 0).sum() / len(portfolio_monthly_pnl) * 100:.1f}% ({portfolio_monthly_pnl[portfolio_monthly_pnl > 0].count()}/{len(portfolio_monthly_pnl)})")
+print(f"{'Portfolio Best Month:':<30} ${portfolio_monthly_pnl.max():,.2f}")
+print(f"{'Portfolio Average Month:':<30} ${portfolio_monthly_pnl.mean():,.2f}")
+print(f"{'Portfolio Worst Month:':<30} ${portfolio_monthly_pnl.min():,.2f}")
+print(f"{'Portfolio Yearly P&L Total:':<30} ${portfolio_yearly_pnl.sum():,.2f}")
+print(
+    f"{'Portfolio Yearly Win Rate:':<30} {(portfolio_yearly_pnl > 0).sum() / len(portfolio_yearly_pnl) * 100:.1f}% ({portfolio_yearly_pnl[portfolio_yearly_pnl > 0].count()}/{len(portfolio_yearly_pnl)})")
+
+# Account performance summary - SIMPLER FIX
 print("\n" + "-" * 60)
 print("ACCOUNT PERFORMANCE SUMMARY")
 print("-" * 60)
-print(f"{'Account':<10} {'Date':<10} {'Status':<10} {'Start Equity':<15} {'End Equity':<15} {'P&L':<15} {'Return %':<10}")
+print(
+    f"{'Account':<10} {'Date':<10} {'Status':<10} {'Start Equity':<15} {'End Equity':<15} {'P&L':<15} {'Return %':<10}")
 print("-" * 60)
 
 for i in range(number_accounts_started):
@@ -619,13 +879,38 @@ for i in range(number_accounts_started):
     if i < len(acc_eq_df.columns):
         start_val = START_CAPITAL
         start_date = acc_eq_df[acc_col].first_valid_index()
-        start_date = start_date.date()
+        start_date_str = str(start_date.date()) if start_date else "N/A"
         end_val = acc_eq_df[acc_col].dropna().iloc[-1]
         pnl = end_val - start_val
         return_pct = (pnl / start_val) * 100
 
+        # FIXED: Check if account was blown by checking equity against blowout levels
+        account_data = acc_eq_df[acc_col].dropna()
+
+        # Determine blowout thresholds dynamically
+        # For each day, calculate what the trailing DD floor would be
+        blown = False
+        rolling_max = account_data.cummax()
+
+        for idx, (date_val, equity_val) in enumerate(account_data.items()):
+            current_max = rolling_max.iloc[idx]
+
+            if current_max < DD_FREEZE_TRIGGER:
+                # Trailing mode (normal)
+                dd_floor = current_max - TRAILING_DD
+            else:
+                # Fixed mode (freeze)
+                dd_floor = FROZEN_DD_FLOOR
+
+            # Check if equity fell below the DD floor
+            if equity_val <= dd_floor:
+                blown = True
+                break
+
         # Determine status
-        if end_val <= 0:
+        if blown:
+            status = "BLOWN"
+        elif end_val <= 0:
             status = "BLOWN"
         elif end_val <= start_val * 0.8:  # More than 20% drawdown
             status = "DRAWDOWN"
@@ -634,7 +919,8 @@ for i in range(number_accounts_started):
         else:
             status = "NEUTRAL"
 
-        print(f"{i + 1:<10} {str(start_date): <12} {status:<10} ${start_val:<14,.0f} ${end_val:<14,.0f} ${pnl:<14,.0f} {return_pct:<9.1f}%")
+        print(
+            f"{i + 1:<10} {start_date_str:<12} {status:<10} ${start_val:<14,.0f} ${end_val:<14,.0f} ${pnl:<14,.0f} {return_pct:<9.1f}%")
 
 print("=" * 60)
 
