@@ -2,7 +2,6 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import numpy as np
 import matplotlib.dates as mdates
-from matplotlib.ticker import FuncFormatter
 
 # ========================================================================================
 #  CONFIG
@@ -11,7 +10,7 @@ pd.set_option('display.min_rows', 1000)  # Show min 1000 rows when printing
 pd.set_option('display.max_rows', 2000)  # Show max 100 rows when printing
 pd.set_option('display.max_columns', 10)  # Show max 50 columns when printing
 
-CSV_PATH = "../MAE/MNQ_november_premarket.csv"  # path to your CSV file
+CSV_PATH = "../MAE/RG_premarket_till_10.csv"  # path to your CSV file
 START_CAPITAL = 1500
 
 # --- Drawdown settings ---
@@ -23,7 +22,7 @@ DD_LOOKBACK = 10  # days to check for new lows
 REQUIRE_DD_STABLE = False  # require DD to not make new lows in lookback period before starting new account
 
 # --- Date range filter (set to None to disable) ---
-START_DATE = None
+START_DATE = "2025-11-01"
 END_DATE = None
 
 # ==================================================================
