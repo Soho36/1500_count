@@ -103,8 +103,8 @@ def process_csv_file(input_file, output_file):
 
 def main():
     # Configuration
-    input_file = 'C:\YandexDisk\Desktop_Zal\MNQ_History_files\MNQH26\MNQ_feb.csv'  # Change this to your input file name
-    output_file = 'C:\YandexDisk\Desktop_Zal\MNQ_History_files\Contionuous_merged\merged_files_outputs\dst_adjusted.csv'  # Output file name
+    input_file = 'C:\YandexDisk\Desktop_Zal\MNQ_History_files\MES\MES_merged_no_spread.csv'  # Change this to your input file name
+    output_file = 'C:\YandexDisk\Desktop_Zal\MNQ_History_files\MES\MES_merged_no_spread_dst_adjusted.csv'  # Output file name
 
     process_csv_file(input_file, output_file)
 

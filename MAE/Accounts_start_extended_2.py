@@ -22,8 +22,8 @@ DD_LOOKBACK = 10
 REQUIRE_DD_STABLE = False
 
 # --- Date range filter ---
-START_DATE = "2025-01-01"
-END_DATE = None
+START_DATE = "2025-02-25"
+END_DATE = "2025-04-15"
 
 # ==================================================================
 # --- New account start triggers ---
