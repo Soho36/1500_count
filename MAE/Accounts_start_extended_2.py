@@ -2,6 +2,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import numpy as np
 import matplotlib.dates as mdates
+import matplotlib.ticker as mticker
 from datetime import timedelta
 
 # ========================================================================================
@@ -9,7 +10,7 @@ from datetime import timedelta
 # ========================================================================================
 pd.set_option('display.min_rows', 1000)
 pd.set_option('display.max_rows', 2000)
-pd.set_option('display.max_columns', 10)
+pd.set_option('display.max_categories', 10)
 
 CSV_PATH = "../MAE/RG_premarket_till_10.csv"
 START_CAPITAL = 1500
@@ -18,12 +19,10 @@ START_CAPITAL = 1500
 TRAILING_DD = 1500
 DD_FREEZE_TRIGGER = START_CAPITAL + TRAILING_DD + 100
 FROZEN_DD_FLOOR = START_CAPITAL + 100
-DD_LOOKBACK = 10
-REQUIRE_DD_STABLE = False
 
 # --- Date range filter ---
-START_DATE = "2025-02-25"
-END_DATE = "2025-04-15"
+START_DATE = "2025-01-01"
+END_DATE = None
 
 # ==================================================================
 # --- New account start triggers ---
@@ -38,7 +37,7 @@ START_IF_DD_THRESHOLD = 400
 RECOVERY_LEVEL = 0
 MIN_DAYS_BETWEEN_STARTS = 1
 
-SHOW_PORTFOLIO_TOTAL_EQUITY = True
+SHOW_PORTFOLIO_TOTAL_PNL = True  # Changed from SHOW_PORTFOLIO_TOTAL_EQUITY
 SHOW_DD_PLOT = True
 USE_PROP_STYLE_DD = True
 
@@ -182,10 +181,7 @@ def compute_prop_style_drawdown(df):
 
     daily_data["Date"] = pd.to_datetime(daily_data["Date"])
 
-    # Add start capital to all equity values
-    daily_data["Equity"] = START_CAPITAL + daily_data["Equity"]
-    daily_data["Equity_Peak"] = START_CAPITAL + daily_data["Equity_Peak"]
-    daily_data["Equity_Low"] = START_CAPITAL + daily_data["Equity_Low"]
+    # KEEP EVERYTHING IN PURE PNL SPACE
     daily_data["DD_Floating"] = daily_data["Equity_Low"] - daily_data["Equity_Peak"]
 
     # Also calculate closed DD for comparison
@@ -300,8 +296,8 @@ def simulate_accounts_with_prop_dd_optimized(events_df, start_capital, max_accou
     last_start_date = pd.Timestamp(event_times[0])
     waiting_for_recovery = False
 
-    # For fast portfolio tracking
-    portfolio_equity_history = []
+    # For fast portfolio tracking - now tracking PNL instead of equity
+    portfolio_pnl_history = []
     num_alive_history = []
     portfolio_times = []
 
@@ -314,6 +310,7 @@ def simulate_accounts_with_prop_dd_optimized(events_df, start_capital, max_accou
         'start_idx': 0,
         'start_date': pd.Timestamp(event_times[0]),
         'equity': start_capital,
+        'pnl': 0,  # Track PNL separately
         'peak': start_capital,
         'alive': True,
         'current_trade_start_equity': None,
@@ -366,6 +363,7 @@ def simulate_accounts_with_prop_dd_optimized(events_df, start_capital, max_accou
                             'time': current_time,
                             'account_id': acc['id'],
                             'equity': pre_event_equity,
+                            'pnl': acc['pnl'],
                             'event': 'blowout_mae'
                         })
 
@@ -380,6 +378,7 @@ def simulate_accounts_with_prop_dd_optimized(events_df, start_capital, max_accou
                 # Process exit
                 if acc['current_trade_start_equity'] is not None and acc['alive']:
                     acc['equity'] = acc['current_trade_start_equity'] + event_pnl[event_idx]
+                    acc['pnl'] = acc['equity'] - start_capital  # Update PNL
 
                     if acc['equity'] > acc['peak']:
                         acc['peak'] = acc['equity']
@@ -401,6 +400,7 @@ def simulate_accounts_with_prop_dd_optimized(events_df, start_capital, max_accou
                             'time': current_time,
                             'account_id': acc['id'],
                             'equity': acc['equity'],
+                            'pnl': acc['pnl'],
                             'event': 'blowout_exit'
                         })
                     else:
@@ -409,15 +409,16 @@ def simulate_accounts_with_prop_dd_optimized(events_df, start_capital, max_accou
                             'time': current_time,
                             'account_id': acc['id'],
                             'equity': acc['equity'],
+                            'pnl': acc['pnl'],
                             'event': 'exit'
                         })
 
-        # Record portfolio state at exits and blowouts
+        # Record portfolio state at exits and blowouts - now tracking PNL
         if event_type in ['exit', 'mae']:
-            total_equity = sum(acc['equity'] for acc in accounts if acc['alive'])
+            total_pnl = sum(acc['pnl'] for acc in accounts if acc['alive'])
             alive_count = sum(1 for acc in accounts if acc['alive'])
 
-            portfolio_equity_history.append(total_equity)
+            portfolio_pnl_history.append(total_pnl)
             num_alive_history.append(alive_count)
             portfolio_times.append(current_time)
 
@@ -475,6 +476,7 @@ def simulate_accounts_with_prop_dd_optimized(events_df, start_capital, max_accou
                         'start_idx': event_idx,
                         'start_date': current_time,
                         'equity': start_capital,
+                        'pnl': 0,
                         'peak': start_capital,
                         'alive': True,
                         'freeze_triggered': False,
@@ -487,33 +489,33 @@ def simulate_accounts_with_prop_dd_optimized(events_df, start_capital, max_accou
 
     print(f"\nSimulation complete. Processed {total_events} events, {len(accounts)} accounts.")
 
-    # Create DataFrames from recorded history
+    # Create DataFrames from recorded history - now tracking PNL
     if portfolio_times:
-        portfolio_series = pd.Series(portfolio_equity_history, index=portfolio_times, name='portfolio_equity')
-        portfolio_daily = portfolio_series.resample('D').last().fillna(method='ffill')
+        portfolio_pnl_series = pd.Series(portfolio_pnl_history, index=portfolio_times, name='portfolio_pnl')
+        portfolio_pnl_daily = portfolio_pnl_series.resample('D').last().fillna(method='ffill')
 
         num_alive_series = pd.Series(num_alive_history, index=portfolio_times, name='num_alive')
         num_alive_daily = num_alive_series.resample('D').last().fillna(method='ffill')
     else:
-        portfolio_daily = pd.Series()
+        portfolio_pnl_daily = pd.Series()
         num_alive_daily = pd.Series()
 
-    # Create account equities DataFrame from history points
+    # Create account PNL DataFrame from history points
     if account_history_points:
         history_df = pd.DataFrame(account_history_points)
-        # Pivot to get account equities over time
-        account_equities = history_df.pivot_table(
+        # Pivot to get account PNL over time
+        account_pnl = history_df.pivot_table(
             index='time',
             columns='account_id',
-            values='equity',
+            values='pnl',
             aggfunc='last'
         )
-        account_equities.columns = [f'acc_{col}' for col in account_equities.columns]
-        account_equities = account_equities.resample('D').last().fillna(method='ffill')
+        account_pnl.columns = [f'acc_{col}_pnl' for col in account_pnl.columns]
+        account_pnl = account_pnl.resample('D').last().fillna(method='ffill')
     else:
-        account_equities = pd.DataFrame()
+        account_pnl = pd.DataFrame()
 
-    return portfolio_daily, account_equities, num_alive_daily, accounts
+    return portfolio_pnl_daily, account_pnl, num_alive_daily, accounts
 
 
 def simulate_accounts_closed_dd(pl_series, start_capital, max_accounts):
@@ -527,20 +529,22 @@ def simulate_accounts_closed_dd(pl_series, start_capital, max_accounts):
         'start_idx': 0,
         'start_date': dates[0],
         'equity': start_capital,
+        'pnl': 0,
         'rolling_max': start_capital,
         'alive': True
     })
 
     last_start_date = dates[0]
-    portfolio_equity = []
+    portfolio_pnl = []
     num_alive = []
-    account_equities = []
+    account_pnls = []
 
     for i_date, date in enumerate(dates):
         # Update accounts
         for acc in accounts:
             if acc['alive'] and i_date >= acc['start_idx']:
                 acc['equity'] += pl_series.iloc[i_date]
+                acc['pnl'] = acc['equity'] - start_capital
                 acc['rolling_max'] = max(acc['rolling_max'], acc['equity'])
 
                 # Check blowout
@@ -552,15 +556,15 @@ def simulate_accounts_closed_dd(pl_series, start_capital, max_accounts):
                 if acc['equity'] <= dd_floor:
                     acc['alive'] = False
 
-        # Record
-        total = sum(acc['equity'] for acc in accounts if acc['alive'])
-        portfolio_equity.append(total)
+        # Record - now tracking PNL
+        total_pnl = sum(acc['pnl'] for acc in accounts if acc['alive'])
+        portfolio_pnl.append(total_pnl)
         num_alive.append(sum(1 for acc in accounts if acc['alive']))
 
-        row = {f'acc_{acc["id"]}': acc['equity'] if acc['start_idx'] <= i_date else np.nan
+        row = {f'acc_{acc["id"]}_pnl': acc['pnl'] if acc['start_idx'] <= i_date else np.nan
                for acc in accounts}
         row['time'] = date
-        account_equities.append(row)
+        account_pnls.append(row)
 
         # Start new accounts (time-based only for closed mode)
         if len(accounts) < max_accounts and USE_TIME_TRIGGER:
@@ -570,16 +574,17 @@ def simulate_accounts_closed_dd(pl_series, start_capital, max_accounts):
                     'start_idx': i_date,
                     'start_date': date,
                     'equity': start_capital,
+                    'pnl': 0,
                     'rolling_max': start_capital,
                     'alive': True
                 })
                 last_start_date = date
 
-    portfolio_series = pd.Series(portfolio_equity, index=dates, name='portfolio_equity')
-    accounts_df = pd.DataFrame(account_equities).set_index('time')
+    portfolio_pnl_series = pd.Series(portfolio_pnl, index=dates, name='portfolio_pnl')
+    accounts_df = pd.DataFrame(account_pnls).set_index('time')
     num_alive_series = pd.Series(num_alive, index=dates, name='num_alive')
 
-    return portfolio_series, accounts_df, num_alive_series, accounts
+    return portfolio_pnl_series, accounts_df, num_alive_series, accounts
 
 
 def print_config():
@@ -617,16 +622,28 @@ if USE_PROP_STYLE_DD:
     # Also create daily P&L series for monthly/yearly charts
     daily_pnl_for_plots = daily_data[["Date", "Equity"]].copy()
     daily_pnl_for_plots.rename(columns={"Equity": "PNL_Daily"}, inplace=True)
-    daily_pnl_for_plots["PNL_Daily"] = daily_pnl_for_plots["PNL_Daily"].diff().fillna(
-        daily_pnl_for_plots["PNL_Daily"].iloc[0] - START_CAPITAL
-    )
+
+    # Calculate P&L correctly
+    daily_pnl_for_plots["PNL_Daily"] = daily_pnl_for_plots["PNL_Daily"].diff()
+    # First day P&L is equity - START_CAPITAL
+    if len(daily_pnl_for_plots) > 0:
+        daily_pnl_for_plots.iloc[0, daily_pnl_for_plots.columns.get_loc('PNL_Daily')] = \
+            daily_data["Equity"].iloc[0]
+
     daily_pnl_for_plots.set_index('Date', inplace=True)
+
 else:
-    # For closed mode, create daily P&L from trades
+    # For closed mode, create daily P&L from trades directly
     df['Date'] = df['Exit_time'].dt.date
     daily_pnl = df.groupby('Date')['PNL'].sum()
     daily_pnl.index = pd.to_datetime(daily_pnl.index)
     daily_pnl = daily_pnl.sort_index()
+
+    # For days with no trades, P&L is 0
+    # Create a complete date range
+    if len(daily_pnl) > 0:
+        date_range = pd.date_range(start=daily_pnl.index.min(), end=daily_pnl.index.max(), freq='D')
+        daily_pnl = daily_pnl.reindex(date_range, fill_value=0)
 
     # Create plot_df for closed mode
     equity_original = START_CAPITAL + daily_pnl.cumsum()
@@ -664,13 +681,13 @@ if USE_PROP_STYLE_DD:
 
     # Run OPTIMIZED simulation
     print("\nRunning simulation (optimized)...")
-    portfolio_eq, acc_eq_df, num_alive_df, accounts = simulate_accounts_with_prop_dd_optimized(
+    portfolio_pnl, acc_pnl_df, num_alive_df, accounts = simulate_accounts_with_prop_dd_optimized(
         events_df, START_CAPITAL, MAX_ACCOUNTS
     )
 
 else:
     # Run closed equity simulation
-    portfolio_eq, acc_eq_df, num_alive_df, accounts = simulate_accounts_closed_dd(
+    portfolio_pnl, acc_pnl_df, num_alive_df, accounts = simulate_accounts_closed_dd(
         daily_pnl, START_CAPITAL, MAX_ACCOUNTS
     )
 
@@ -712,55 +729,84 @@ axes[2].set_ylabel("Drawdown ($)")
 axes[2].grid(True)
 axes[2].legend()
 
+# Force every month on x-axis for shared equity/DD plots
+axes[2].xaxis.set_major_locator(mdates.MonthLocator(interval=1))
+axes[2].xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m'))
+
+plt.setp(axes[2].xaxis.get_majorticklabels(), rotation=45)
 plt.tight_layout()
 
 # ======================
-# PORTFOLIO EQUITY PLOT
+# PORTFOLIO PNL PLOT (replacing Portfolio Total Equity)
 # ======================
 
-if SHOW_PORTFOLIO_TOTAL_EQUITY and not portfolio_eq.empty:
+if SHOW_PORTFOLIO_TOTAL_PNL and not portfolio_pnl.empty:
     fig_portfolio, ax_portfolio = plt.subplots(figsize=(14, 6))
 
     ax_portfolio.plot(
-        portfolio_eq.index,
-        portfolio_eq.values,
+        portfolio_pnl.index,
+        portfolio_pnl.values,
         linewidth=3,
         color='blue',
-        label="Portfolio Total Equity"
+        label="Portfolio Total P&L"
     )
 
-    ax_portfolio.set_title("Portfolio Total Equity (All Accounts Combined)")
-    ax_portfolio.set_ylabel("Equity ($)")
+    # Add zero line for reference
+    ax_portfolio.axhline(y=0, color='black', linewidth=0.8, alpha=0.5, linestyle='--')
+
+    ax_portfolio.set_title("Portfolio Total P&L (All Accounts Combined)")
+    ax_portfolio.set_ylabel("P&L ($)")
     ax_portfolio.set_xlabel("Date")
     ax_portfolio.grid(True, alpha=0.3)
     ax_portfolio.legend()
+
+    # Format x-axis to show months nicely
+    ax_portfolio.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m'))
+    ax_portfolio.xaxis.set_major_locator(mdates.MonthLocator(interval=1))
+    plt.setp(ax_portfolio.xaxis.get_majorticklabels(), rotation=45)
 
     plt.setp(ax_portfolio.xaxis.get_majorticklabels(), rotation=45)
     plt.tight_layout()
 
 # ======================
-# INDIVIDUAL ACCOUNTS PLOT
+# INDIVIDUAL ACCOUNTS P&L PLOT (now showing P&L instead of equity)
 # ======================
 
-if not acc_eq_df.empty:
+if not acc_pnl_df.empty:
     fig_accounts, ax_accounts = plt.subplots(figsize=(14, 6))
 
     number_accounts_started = len(accounts)
 
-    # Plot each account's equity curve
-    for i, col in enumerate(acc_eq_df.columns[:number_accounts_started]):
+    # Plot each account's P&L curve
+    for i, col in enumerate(acc_pnl_df.columns[:number_accounts_started]):
         ax_accounts.plot(
-            acc_eq_df.index,
-            acc_eq_df[col],
+            acc_pnl_df.index,
+            acc_pnl_df[col],
             alpha=0.7,
             linewidth=1.5,
             label=f"Account {i + 1}" if i < 10 else None  # Only label first 10 for legend
         )
 
-    ax_accounts.set_title("Individual Accounts Equity")
-    ax_accounts.set_ylabel("Equity ($)")
+    ax_accounts.set_title("Individual Accounts P&L")
+    ax_accounts.set_ylabel("P&L ($)")
     ax_accounts.set_xlabel("Date")
     ax_accounts.grid(True, alpha=0.3)
+    ax_accounts.axhline(y=0, color='black', linewidth=0.8, alpha=0.5, linestyle='--')
+
+    # Format x-axis to show months nicely
+    ax_accounts.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m'))
+    ax_accounts.xaxis.set_major_locator(mdates.MonthLocator(interval=1))
+    plt.setp(ax_accounts.xaxis.get_majorticklabels(), rotation=45)
+
+    # Frozen DD floor line
+    ax_accounts.axhline(
+        y=FROZEN_DD_FLOOR,
+        color='red',
+        linewidth=2,
+        linestyle='--',
+        alpha=0.8,
+        label=f'Frozen DD floor line{FROZEN_DD_FLOOR}'
+    )
 
     plt.setp(ax_accounts.xaxis.get_majorticklabels(), rotation=45)
     plt.tight_layout()
@@ -795,6 +841,56 @@ if not num_alive_df.empty:
     plt.setp(ax5.xaxis.get_majorticklabels(), rotation=45)
     plt.tight_layout()
 
+
+# ============================================================
+# CHART 0: DAILY P&L (Single Account Strategy)
+# ============================================================
+
+daily_pnl_series = daily_pnl_for_plots['PNL_Daily']
+
+fig_daily, ax_daily = plt.subplots(figsize=(16, 6))
+
+colors = ['green' if x >= 0 else 'red' for x in daily_pnl_series.values]
+
+bars = ax_daily.bar(
+    daily_pnl_series.index,
+    daily_pnl_series.values,
+    color=colors,
+    alpha=0.7,
+    edgecolor='black',
+    linewidth=0.3
+)
+
+# Zero line
+ax_daily.axhline(y=0, color='black', linewidth=0.8, alpha=0.7)
+
+# X-axis formatting (daily)
+ax_daily.xaxis.set_major_locator(mdates.DayLocator(interval=5))   # every 5 days (adjust if needed)
+ax_daily.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m-%d'))
+plt.setp(ax_daily.xaxis.get_majorticklabels(), rotation=60)
+
+# Y-axis formatting (daily)
+ax_daily.yaxis.set_major_formatter(mticker.StrMethodFormatter('${x:,.0f}'))
+ax_daily.yaxis.set_major_locator(mticker.MultipleLocator(50))
+
+# Titles / labels
+ax_daily.set_title("Single Account Strategy - Daily P&L", fontsize=14, fontweight='bold')
+ax_daily.set_ylabel("P&L ($)")
+ax_daily.set_xlabel("Date")
+ax_daily.grid(True, alpha=0.3, axis='y')
+
+# Summary stats
+total_daily = daily_pnl_series.sum()
+positive_days = (daily_pnl_series > 0).sum()
+win_rate_daily = positive_days / len(daily_pnl_series) * 100 if len(daily_pnl_series) > 0 else 0
+
+textstr = f'Total: ${total_daily:,.0f} | Win Rate: {win_rate_daily:.1f}% ({positive_days}/{len(daily_pnl_series)})'
+ax_daily.text(0.02, 0.98, textstr, transform=ax_daily.transAxes,
+              fontsize=10, verticalalignment='top',
+              bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.5))
+
+plt.tight_layout()
+
 # ============================================================
 # CHART 1: MONTHLY P&L (Single Account Strategy)
 # ============================================================
@@ -817,7 +913,7 @@ ax_monthly.axhline(y=0, color='black', linewidth=0.8, alpha=0.7)
 
 # Format x-axis to show months nicely
 ax_monthly.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m'))
-ax_monthly.xaxis.set_major_locator(mdates.MonthLocator(interval=3))
+ax_monthly.xaxis.set_major_locator(mdates.MonthLocator(interval=1))
 plt.setp(ax_monthly.xaxis.get_majorticklabels(), rotation=45)
 
 # Add value labels on top of bars
@@ -906,12 +1002,12 @@ ax_yearly.text(0.02, 0.98, textstr, transform=ax_yearly.transAxes,
 plt.tight_layout()
 
 # ============================================================
-# CHART 3: PORTFOLIO MONTHLY P&L
+# CHART 3: PORTFOLIO MONTHLY P&L (now using portfolio_pnl)
 # ============================================================
 
-if not portfolio_eq.empty:
-    # Calculate daily portfolio P&L from portfolio equity curve
-    portfolio_daily_pnl = portfolio_eq.diff().fillna(portfolio_eq.iloc[0] - START_CAPITAL)
+if not portfolio_pnl.empty:
+    # Calculate daily portfolio P&L from portfolio PNL curve
+    portfolio_daily_pnl = portfolio_pnl.diff().fillna(portfolio_pnl.iloc[0])
     portfolio_daily_pnl.name = 'Portfolio_PNL_Daily'
 
     # Group by month and sum portfolio P&L
@@ -932,7 +1028,7 @@ if not portfolio_eq.empty:
 
     # Format x-axis to show months nicely
     ax_portfolio_monthly.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m'))
-    ax_portfolio_monthly.xaxis.set_major_locator(mdates.MonthLocator(interval=3))
+    ax_portfolio_monthly.xaxis.set_major_locator(mdates.MonthLocator(interval=1))
     plt.setp(ax_portfolio_monthly.xaxis.get_majorticklabels(), rotation=45)
 
     # Add value labels on top of bars
@@ -969,10 +1065,10 @@ if not portfolio_eq.empty:
     plt.tight_layout()
 
 # ============================================================
-# CHART 4: PORTFOLIO YEARLY P&L
+# CHART 4: PORTFOLIO YEARLY P&L (now using portfolio_pnl)
 # ============================================================
 
-if not portfolio_eq.empty:
+if not portfolio_pnl.empty:
     # Group by year and sum portfolio P&L
     portfolio_yearly_pnl = portfolio_daily_pnl.resample('Y').sum()
 
@@ -1023,8 +1119,6 @@ if not portfolio_eq.empty:
 
     plt.tight_layout()
 
-# ... (all the previous code remains the same until the statistics section)
-
 # ======================
 #  STATISTICS
 # ======================
@@ -1032,43 +1126,41 @@ print("\n" + "=" * 60)
 print("SIMULATION RESULTS")
 print("=" * 60)
 
+print("\nFINAL P&L PER ACCOUNT")
+print("-" * 60)
+
+for acc in accounts:
+    status = "ALIVE" if acc['alive'] else "BLOWN"
+    print(
+        f"Account {acc['id']:>2} | "
+        f"Status: {status:<5} | "
+        f"Final P&L: ${acc['pnl']:>8.2f}"
+    )
+
+print("-" * 60)
+
 number_accounts_started = len(accounts)
 number_accounts_alive = sum(1 for acc in accounts if acc['alive'])
-final_portfolio_equity = portfolio_eq.iloc[-1] if not portfolio_eq.empty else 0
+final_portfolio_pnl = portfolio_pnl.iloc[-1] if not portfolio_pnl.empty else 0
 total_capital_deployed = START_CAPITAL * number_accounts_started
-final_pnl = final_portfolio_equity - total_capital_deployed
 
 print(f"{'Simulation Mode:':<30} {'Prop Firm (Intraday)' if USE_PROP_STYLE_DD else 'Closed Equity'}")
-print(f"{'Final Portfolio Equity:':<30} ${final_portfolio_equity:,.2f}")
+print(f"{'Final Portfolio P&L:':<30} ${final_portfolio_pnl:,.2f}")
 print(f"{'Total Capital Deployed:':<30} ${total_capital_deployed:,.2f}")
-print(f"{'Final P&L:':<30} ${final_pnl:,.2f}")
-print(f"{'Return on Capital:':<30} {(final_pnl / total_capital_deployed * 100):.1f}%")
+print(f"{'Return on Capital:':<30} {(final_portfolio_pnl / total_capital_deployed * 100):.1f}%")
 print(f"{'Accounts Started:':<30} {number_accounts_started}")
 print(f"{'Accounts Alive:':<30} {number_accounts_alive}")
 print(f"{'Accounts Blown:':<30} {number_accounts_started - number_accounts_alive}")
 print(f"{'Survival Rate:':<30} {(number_accounts_alive / number_accounts_started * 100):.1f}%")
 
 if USE_PROP_STYLE_DD:
-    # For blowout analysis, we need to determine how accounts died
-    # Since we don't store full history, we can infer from account state
-    mae_blowouts = 0
-    exit_blowouts = 0
     freeze_triggered_count = 0
 
     for acc in accounts:
         if acc['freeze_triggered']:
             freeze_triggered_count += 1
 
-        # For blowout type, we can't easily determine from optimized version
-        # But we can count total blown accounts
-        if not acc['alive']:
-            # We know they're blown, but not whether at MAE or exit
-            # For now, we'll just count them as blown
-            pass
-
     print(f"\nBlowout Analysis:")
-    print(f"{'Blown at MAE (intraday):':<30} {'(not tracked in optimized mode)'}")
-    print(f"{'Blown at Exit:':<30} {'(not tracked in optimized mode)'}")
     print(f"{'Accounts that hit freeze trigger:':<30} {freeze_triggered_count}")
     print(f"{'Total Blown Accounts:':<30} {number_accounts_started - number_accounts_alive}")
 
@@ -1104,10 +1196,10 @@ else:
     print("Yearly P&L data not available")
 
 # Portfolio stats
-if not portfolio_eq.empty:
+if not portfolio_pnl.empty:
     # Calculate daily portfolio P&L if not already done
     if 'portfolio_daily_pnl' not in locals():
-        portfolio_daily_pnl = portfolio_eq.diff().fillna(portfolio_eq.iloc[0] - START_CAPITAL)
+        portfolio_daily_pnl = portfolio_pnl.diff().fillna(portfolio_pnl.iloc[0])
 
     portfolio_monthly_pnl = portfolio_daily_pnl.resample('M').sum()
     portfolio_yearly_pnl = portfolio_daily_pnl.resample('Y').sum()
@@ -1133,9 +1225,9 @@ print("\n" + "=" * 60)
 print("\nIMPORTANT NOTE: This simulation assumes MAE occurs before MFE in each trade.")
 print("This is the most conservative assumption. In reality, the sequence varies,")
 print("so actual survival rates may be higher than simulated.")
+print(f"\nTotal Capital Deployed across {number_accounts_started} accounts: ${total_capital_deployed:,.2f}")
 
 try:
     plt.show()
 except KeyboardInterrupt:
     print("\nScript stopped by user.")
-
