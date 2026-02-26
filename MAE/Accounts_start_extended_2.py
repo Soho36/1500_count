@@ -12,7 +12,7 @@ pd.set_option('display.min_rows', 1000)
 pd.set_option('display.max_rows', 2000)
 pd.set_option('display.max_categories', 10)
 
-CSV_PATH = "../MAE/RG_premarket_till_10.csv"
+CSV_PATH = "../MAE/RG_h1_intervals_night.csv"
 START_CAPITAL = 1500
 
 # --- Drawdown settings ---
@@ -21,7 +21,7 @@ DD_FREEZE_TRIGGER = START_CAPITAL + TRAILING_DD + 100
 FROZEN_DD_FLOOR = START_CAPITAL + 100
 
 # --- Date range filter ---
-START_DATE = "2025-01-01"
+START_DATE = "2026-02-09"
 END_DATE = None
 
 # ==================================================================

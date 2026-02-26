@@ -91,7 +91,12 @@ def process_csv_file(input_file, output_file):
     df_adjusted = df_adjusted.drop('DATETIME', axis=1)
 
     # Save to new file
-    df_adjusted.to_csv(output_file, sep='\t', index=False)
+    try:
+        df_adjusted.to_csv(output_file, sep='\t', index=False)
+    except Exception as e:
+        print(f"Error saving adjusted data: {e}")
+        return
+
     print(f"Saved adjusted data to {output_file}")
 
     # Display some samples
@@ -103,8 +108,9 @@ def process_csv_file(input_file, output_file):
 
 def main():
     # Configuration
-    input_file = 'C:\YandexDisk\Desktop_Zal\MNQ_History_files\MES\MES_merged_no_spread.csv'  # Change this to your input file name
-    output_file = 'C:\YandexDisk\Desktop_Zal\MNQ_History_files\MES\MES_merged_no_spread_dst_adjusted.csv'  # Output file name
+    input_file = 'E:\\YandexDisk\\Desktop_Zal\\MNQ_History_files\\MNQH26\\MNQH26todate.csv'  # Change this to your input file name
+    input_file_name = input_file.split('\\')[-1]  # Extract file name from path
+    output_file = f'E:\\YandexDisk\\Desktop_Zal\\MNQ_History_files\\MNQH26\\{input_file_name}_dst_adjusted.csv'  # Output file name
 
     process_csv_file(input_file, output_file)
 
