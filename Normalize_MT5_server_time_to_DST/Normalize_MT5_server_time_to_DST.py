@@ -108,9 +108,9 @@ def process_csv_file(input_file, output_file):
 
 def main():
     # Configuration
-    input_file = 'E:\\YandexDisk\\Desktop_Zal\\MNQ_History_files\\MNQH26\\MNQH26todate.csv'  # Change this to your input file name
+    input_file = 'C:\\YandexDisk\\Desktop_Zal\\MNQ_History_files\\MNQH26\\MNQH26_13-28.csv'  # Change this to your input file name
     input_file_name = input_file.split('\\')[-1]  # Extract file name from path
-    output_file = f'E:\\YandexDisk\\Desktop_Zal\\MNQ_History_files\\MNQH26\\{input_file_name}_dst_adjusted.csv'  # Output file name
+    output_file = f'C:\\YandexDisk\\Desktop_Zal\\MNQ_History_files\\MNQH26\\{input_file_name}_dst_adjusted.csv'  # Output file name
 
     process_csv_file(input_file, output_file)
 

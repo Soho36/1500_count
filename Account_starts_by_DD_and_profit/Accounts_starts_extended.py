@@ -10,7 +10,7 @@ pd.set_option('display.min_rows', 1000)  # Show min 1000 rows when printing
 pd.set_option('display.max_rows', 2000)  # Show max 100 rows when printing
 pd.set_option('display.max_columns', 10)  # Show max 50 columns when printing
 
-CSV_PATH = "../MAE/RG_premarket_till_10.csv"  # path to your CSV file
+CSV_PATH = "../MAE/RG_h1_intervals_night_25year_start.csv"  # path to your CSV file
 START_CAPITAL = 1500
 
 # --- Drawdown settings ---
@@ -22,7 +22,7 @@ DD_LOOKBACK = 10  # days to check for new lows
 REQUIRE_DD_STABLE = False  # require DD to not make new lows in lookback period before starting new account
 
 # --- Date range filter (set to None to disable) ---
-START_DATE = "2025-11-01"
+START_DATE = None
 END_DATE = None
 
 # ==================================================================
