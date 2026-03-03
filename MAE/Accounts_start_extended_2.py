@@ -12,7 +12,7 @@ pd.set_option('display.min_rows', 1000)
 pd.set_option('display.max_rows', 2000)
 pd.set_option('display.max_categories', 10)
 
-CSV_PATH = "premarket_1-10.csv"
+CSV_PATH = "databento_all.csv"  # Path to your CSV file
 START_CAPITAL = 1500
 
 # --- Drawdown settings ---
@@ -21,13 +21,13 @@ DD_FREEZE_TRIGGER = START_CAPITAL + TRAILING_DD + 100
 FROZEN_DD_FLOOR = START_CAPITAL + 100
 
 # --- Date range filter ---
-START_DATE = "2025-01-01"
-END_DATE = None
+START_DATE = None
+END_DATE = "2015-06-30"
 
 # ==================================================================
 # --- New account start triggers ---
 # ==================================================================
-MAX_ACCOUNTS = 100
+MAX_ACCOUNTS = 20
 USE_TIME_TRIGGER = True
 TIME_TRIGGER_DAYS = 30
 USE_PROFIT_TRIGGER = False
