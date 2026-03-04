@@ -13,6 +13,15 @@ df = pd.read_csv(CSV_PATH, sep="\t")
 df["Entry_time"] = pd.to_datetime(df["Entry_time"])
 df = df.sort_values("Entry_time")
 
+# Extract unique trading days in chronological order
+unique_days = df["Entry_time"].dt.date.drop_duplicates().tolist()
+
+# Create cyclic account assignment per trading day
+day_to_account = {
+    day: i % NUM_ACCOUNTS
+    for i, day in enumerate(unique_days)
+}
+
 trade_pnls = df["PNL"].values
 trade_days = df["Entry_time"].dt.date.values
 total_trades = len(trade_pnls)
@@ -27,7 +36,7 @@ print(f"Max drawdown allowed per account: ${MAX_DD} from start")
 print("=" * 70)
 
 
-def simulate(mode):
+def simulate(mode, start_index=2315):
     balances = np.full(NUM_ACCOUNTS, START_BALANCE)
     alive = np.ones(NUM_ACCOUNTS, dtype=bool)
     peak = np.full(NUM_ACCOUNTS, START_BALANCE)
@@ -37,7 +46,7 @@ def simulate(mode):
     trades_executed = 0
     trades_skipped = 0
 
-    for i, pnl in enumerate(trade_pnls):
+    for i, pnl in enumerate(trade_pnls[start_index:]):
 
         if not alive.any():
             break
@@ -55,7 +64,7 @@ def simulate(mode):
                 trades_skipped += 1
 
         elif mode == "one_per_day":
-            day_index = (trade_days[i].toordinal()) % NUM_ACCOUNTS
+            day_index = day_to_account[trade_days[i]]
             if alive[day_index]:
                 account_indices = [day_index]
             else:
