@@ -13,10 +13,10 @@ pd.set_option('display.max_rows', 2000)
 pd.set_option('display.max_categories', 10)
 
 CSV_PATH = "databento_premarket.csv"  # Path to your CSV file
-START_CAPITAL = 2000
+START_CAPITAL = 1500
 
 # --- Drawdown settings ---
-TRAILING_DD = 2000
+TRAILING_DD = 1500
 DD_FREEZE_TRIGGER = START_CAPITAL + TRAILING_DD + 100
 FROZEN_DD_FLOOR = START_CAPITAL + 100
 
