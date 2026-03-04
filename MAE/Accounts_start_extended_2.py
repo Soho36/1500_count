@@ -13,10 +13,10 @@ pd.set_option('display.max_rows', 2000)
 pd.set_option('display.max_categories', 10)
 
 CSV_PATH = "databento_premarket.csv"  # Path to your CSV file
-START_CAPITAL = 2000
+START_CAPITAL = 1500
 
 # --- Drawdown settings ---
-TRAILING_DD = 2000
+TRAILING_DD = 1500
 DD_FREEZE_TRIGGER = START_CAPITAL + TRAILING_DD + 100
 FROZEN_DD_FLOOR = START_CAPITAL + 100
 
@@ -40,6 +40,7 @@ MIN_DAYS_BETWEEN_STARTS = 1
 SHOW_PORTFOLIO_TOTAL_PNL = True  # Changed from SHOW_PORTFOLIO_TOTAL_EQUITY
 SHOW_DD_PLOT = True
 USE_PROP_STYLE_DD = True
+USE_EOD_DRAWDOWN = False
 
 # ==================================================================
 #  SIMULATION ASSUMPTIONS (IMPORTANT!)
@@ -313,6 +314,9 @@ def simulate_accounts_with_prop_dd_optimized(events_df, start_capital, max_accou
         'pnl': 0,  # Track PNL separately
         'peak': start_capital,
         'alive': True,
+        'eod_peak': start_capital,
+        'last_eod_check': None,
+        'dd_floor': start_capital - TRAILING_DD,
         'current_trade_start_equity': None,
         'freeze_triggered': False,
         'last_event_idx': 0  # Track last processed event for this account
@@ -321,6 +325,7 @@ def simulate_accounts_with_prop_dd_optimized(events_df, start_capital, max_accou
     # Main simulation loop
     for event_idx in range(total_events):
         current_time = pd.Timestamp(event_times[event_idx])
+        current_day = current_time.date()
         event_type = event_types[event_idx]
 
         # Process only accounts that started before or at this event and are still alive
@@ -345,27 +350,50 @@ def simulate_accounts_with_prop_dd_optimized(events_df, start_capital, max_accou
                 acc['current_trade_start_equity'] = acc['equity']
 
             elif event_type == 'mae':
-                # Check MAE blowout
-                if acc['current_trade_start_equity'] is not None:
+                if acc['current_trade_start_equity'] is not None and acc['alive']:
+
                     temp_equity = acc['current_trade_start_equity'] + event_mae[event_idx]
 
-                    if acc['peak'] < DD_FREEZE_TRIGGER:
-                        dd_floor = acc['peak'] - TRAILING_DD
-                    else:
-                        dd_floor = FROZEN_DD_FLOOR
-                        acc['freeze_triggered'] = True
+                    if USE_PROP_STYLE_DD and USE_EOD_DRAWDOWN:  # Sanity check to prevent enabling both modes at once
+                        raise ValueError("Only one DD mode can be enabled")
+                    # -----------------------------
+                    # Trailing drawdown mode
+                    # -----------------------------
+                    if USE_PROP_STYLE_DD:
 
-                    if temp_equity <= dd_floor:
-                        acc['alive'] = False
-                        print(f"Account {acc['id']} BLOWN at MAE on {current_time}")
-                        # Record blowout for history
-                        account_history_points.append({
-                            'time': current_time,
-                            'account_id': acc['id'],
-                            'equity': pre_event_equity,
-                            'pnl': acc['pnl'],
-                            'event': 'blowout_mae'
-                        })
+                        if acc['peak'] < DD_FREEZE_TRIGGER:
+                            dd_floor = acc['peak'] - TRAILING_DD
+                        else:
+                            dd_floor = FROZEN_DD_FLOOR
+
+                        if temp_equity <= dd_floor:
+                            acc['alive'] = False
+                            print(f"Account {acc['id']} BLOWN intraday (Trailing DD) on {current_time}")
+
+                            account_history_points.append({
+                                'time': current_time,
+                                'account_id': acc['id'],
+                                'equity': temp_equity,
+                                'pnl': acc['pnl'],
+                                'event': 'blowout_mae'
+                            })
+
+                    # -----------------------------
+                    # EOD threshold mode
+                    # -----------------------------
+                    elif USE_EOD_DRAWDOWN:
+
+                        if temp_equity <= acc['dd_floor']:
+                            acc['alive'] = False
+                            print(f"Account {acc['id']} BLOWN intraday by EOD rule on {current_time}")
+
+                            account_history_points.append({
+                                'time': current_time,
+                                'account_id': acc['id'],
+                                'equity': temp_equity,
+                                'pnl': acc['pnl'],
+                                'event': 'blowout_mae'
+                            })
 
             elif event_type == 'mfe':
                 # Update peak if MFE creates new high
@@ -375,10 +403,12 @@ def simulate_accounts_with_prop_dd_optimized(events_df, start_capital, max_accou
                         acc['peak'] = temp_equity
 
             elif event_type == 'exit':
-                # Process exit
+
                 if acc['current_trade_start_equity'] is not None and acc['alive']:
+
+                    # Update equity and pnl
                     acc['equity'] = acc['current_trade_start_equity'] + event_pnl[event_idx]
-                    acc['pnl'] = acc['equity'] - start_capital  # Update PNL
+                    acc['pnl'] = acc['equity'] - start_capital
 
                     if acc['equity'] > acc['peak']:
                         acc['peak'] = acc['equity']
@@ -387,31 +417,40 @@ def simulate_accounts_with_prop_dd_optimized(events_df, start_capital, max_accou
 
                     acc['current_trade_start_equity'] = None
 
-                    # Check blowout at exit
-                    if acc['peak'] < DD_FREEZE_TRIGGER:
-                        dd_floor = acc['peak'] - TRAILING_DD
-                    else:
-                        dd_floor = FROZEN_DD_FLOOR
+                    # -----------------------------
+                    # Trailing drawdown check
+                    # -----------------------------
+                    if USE_PROP_STYLE_DD:
 
-                    if acc['equity'] <= dd_floor:
-                        acc['alive'] = False
-                        print(f"Account {acc['id']} BLOWN at exit on {current_time}")
-                        account_history_points.append({
-                            'time': current_time,
-                            'account_id': acc['id'],
-                            'equity': acc['equity'],
-                            'pnl': acc['pnl'],
-                            'event': 'blowout_exit'
-                        })
-                    else:
-                        # Record normal exit for history
-                        account_history_points.append({
-                            'time': current_time,
-                            'account_id': acc['id'],
-                            'equity': acc['equity'],
-                            'pnl': acc['pnl'],
-                            'event': 'exit'
-                        })
+                        if acc['peak'] < DD_FREEZE_TRIGGER:
+                            dd_floor = acc['peak'] - TRAILING_DD
+                        else:
+                            dd_floor = FROZEN_DD_FLOOR
+
+                        if acc['equity'] <= dd_floor:
+                            acc['alive'] = False
+                            print(f"Account {acc['id']} BLOWN at exit on {current_time}")
+
+                            account_history_points.append({
+                                'time': current_time,
+                                'account_id': acc['id'],
+                                'equity': acc['equity'],
+                                'pnl': acc['pnl'],
+                                'event': 'blowout_exit'
+                            })
+
+                            continue
+
+                    # -----------------------------
+                    # Normal exit record
+                    # -----------------------------
+                    account_history_points.append({
+                        'time': current_time,
+                        'account_id': acc['id'],
+                        'equity': acc['equity'],
+                        'pnl': acc['pnl'],
+                        'event': 'exit'
+                    })
 
         # Record portfolio state at exits and blowouts - now tracking PNL
         if event_type in ['exit', 'mae']:
@@ -421,6 +460,25 @@ def simulate_accounts_with_prop_dd_optimized(events_df, start_capital, max_accou
             portfolio_pnl_history.append(total_pnl)
             num_alive_history.append(alive_count)
             portfolio_times.append(current_time)
+
+        if USE_EOD_DRAWDOWN and event_type == 'exit':
+
+            for acc in active_accounts:
+                if not acc['alive']:
+                    continue
+
+                # Only check once per day
+                if acc['last_eod_check'] == current_day:
+                    continue
+
+                acc['last_eod_check'] = current_day
+
+                if acc['equity'] <= acc['dd_floor']:
+                    acc['alive'] = False
+                    print(f"Account {acc['id']} BLOWN by EOD rule on {current_time}")
+                else:
+                    acc['eod_peak'] = max(acc['eod_peak'], acc['equity'])
+                    acc['dd_floor'] = acc['eod_peak'] - TRAILING_DD
 
         # Start new accounts at exits
         if event_type == 'exit' and len(accounts) < max_accounts:
@@ -478,6 +536,9 @@ def simulate_accounts_with_prop_dd_optimized(events_df, start_capital, max_accou
                         'equity': start_capital,
                         'pnl': 0,
                         'peak': start_capital,
+                        'eod_peak': start_capital,
+                        'last_eod_check': None,
+                        'dd_floor': start_capital - TRAILING_DD,
                         'alive': True,
                         'freeze_triggered': False,
                         'current_trade_start_equity': None,
@@ -661,8 +722,14 @@ else:
     daily_pnl_for_plots = daily_pnl.to_frame(name='PNL_Daily')
 
 print("\n" + "=" * 60)
-print("SIMULATION MODE:",
-      "Prop Firm (Intraday MAE-based)" if USE_PROP_STYLE_DD else "Closed Equity (Daily close-based)")
+if USE_PROP_STYLE_DD:
+    mode = "Prop Firm Trailing DD"
+elif USE_EOD_DRAWDOWN:
+    mode = "Prop Firm EOD Threshold"
+else:
+    mode = "Closed Equity"
+
+print("SIMULATION MODE:", mode)
 print("=" * 60)
 
 if USE_PROP_STYLE_DD:
