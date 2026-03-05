@@ -13,10 +13,10 @@ pd.set_option('display.max_rows', 2000)
 pd.set_option('display.max_categories', 10)
 
 CSV_PATH = "databento_premarket.csv"  # Path to your CSV file
-START_CAPITAL = 1500
+START_CAPITAL = 2000
 
 # --- Drawdown settings ---
-TRAILING_DD = 1500
+TRAILING_DD = 2000
 DD_FREEZE_TRIGGER = START_CAPITAL + TRAILING_DD + 100
 FROZEN_DD_FLOOR = START_CAPITAL + 100
 
@@ -39,8 +39,8 @@ MIN_DAYS_BETWEEN_STARTS = 1
 
 SHOW_PORTFOLIO_TOTAL_PNL = True  # Changed from SHOW_PORTFOLIO_TOTAL_EQUITY
 SHOW_DD_PLOT = True
-USE_PROP_STYLE_DD = True
-USE_EOD_DRAWDOWN = False
+USE_TRAILING_DD = False
+USE_EOD_DRAWDOWN = True
 
 # ==================================================================
 #  SIMULATION ASSUMPTIONS (IMPORTANT!)
@@ -354,12 +354,12 @@ def simulate_accounts_with_prop_dd_optimized(events_df, start_capital, max_accou
 
                     temp_equity = acc['current_trade_start_equity'] + event_mae[event_idx]
 
-                    if USE_PROP_STYLE_DD and USE_EOD_DRAWDOWN:  # Sanity check to prevent enabling both modes at once
+                    if USE_TRAILING_DD and USE_EOD_DRAWDOWN:  # Sanity check to prevent enabling both modes at once
                         raise ValueError("Only one DD mode can be enabled")
                     # -----------------------------
                     # Trailing drawdown mode
                     # -----------------------------
-                    if USE_PROP_STYLE_DD:
+                    if USE_TRAILING_DD:
 
                         if acc['peak'] < DD_FREEZE_TRIGGER:
                             dd_floor = acc['peak'] - TRAILING_DD
@@ -396,11 +396,12 @@ def simulate_accounts_with_prop_dd_optimized(events_df, start_capital, max_accou
                             })
 
             elif event_type == 'mfe':
-                # Update peak if MFE creates new high
                 if acc['current_trade_start_equity'] is not None and acc['alive']:
                     temp_equity = acc['current_trade_start_equity'] + event_mfe[event_idx]
                     if temp_equity > acc['peak']:
                         acc['peak'] = temp_equity
+                        if acc['peak'] >= DD_FREEZE_TRIGGER:
+                            acc['freeze_triggered'] = True
 
             elif event_type == 'exit':
 
@@ -420,7 +421,7 @@ def simulate_accounts_with_prop_dd_optimized(events_df, start_capital, max_accou
                     # -----------------------------
                     # Trailing drawdown check
                     # -----------------------------
-                    if USE_PROP_STYLE_DD:
+                    if USE_TRAILING_DD:
 
                         if acc['peak'] < DD_FREEZE_TRIGGER:
                             dd_floor = acc['peak'] - TRAILING_DD
@@ -477,11 +478,17 @@ def simulate_accounts_with_prop_dd_optimized(events_df, start_capital, max_accou
                     acc['alive'] = False
                     print(f"Account {acc['id']} BLOWN by EOD rule on {current_time}")
                 else:
-                    acc['eod_peak'] = max(acc['eod_peak'], acc['equity'])
-                    acc['dd_floor'] = acc['eod_peak'] - TRAILING_DD
+                    # Update EOD peak only if freeze not triggered
+                    if not acc['freeze_triggered']:
+                        acc['eod_peak'] = max(acc['eod_peak'], acc['equity'])
+                        if acc['eod_peak'] >= DD_FREEZE_TRIGGER:
+                            acc['freeze_triggered'] = True
+                            acc['dd_floor'] = FROZEN_DD_FLOOR
+                        else:
+                            acc['dd_floor'] = acc['eod_peak'] - TRAILING_DD
 
         # Start new accounts at exits
-        if event_type == 'exit' and len(accounts) < max_accounts:
+        if len(accounts) < max_accounts:
 
             # Calculate current drawdown for triggers
             alive_accounts = [acc for acc in accounts if acc['alive']]
@@ -515,10 +522,8 @@ def simulate_accounts_with_prop_dd_optimized(events_df, start_capital, max_accou
                         trigger_profit = True
 
                 if USE_TIME_TRIGGER:
-                    # Fix: Use total_seconds() to calculate days difference
-                    time_diff = current_time - last_start_date
-                    days_since_last = time_diff.total_seconds() / (24 * 3600)
-                    if days_since_last >= TIME_TRIGGER_DAYS:
+                    next_start_time = last_start_date + pd.Timedelta(days=TIME_TRIGGER_DAYS)
+                    if current_time >= next_start_time:
                         trigger_time = True
 
                 if trigger_dd or trigger_profit or trigger_time:
@@ -532,7 +537,7 @@ def simulate_accounts_with_prop_dd_optimized(events_df, start_capital, max_accou
                     accounts.append({
                         'id': len(accounts) + 1,
                         'start_idx': event_idx,
-                        'start_date': current_time,
+                        'start_date': last_start_date + pd.Timedelta(days=TIME_TRIGGER_DAYS),
                         'equity': start_capital,
                         'pnl': 0,
                         'peak': start_capital,
@@ -544,8 +549,9 @@ def simulate_accounts_with_prop_dd_optimized(events_df, start_capital, max_accou
                         'current_trade_start_equity': None,
                         'last_event_idx': event_idx
                     })
-                    print(f"Started Account {len(accounts)} on {current_time}")
-                    last_start_date = current_time
+                    scheduled_start = last_start_date + pd.Timedelta(days=TIME_TRIGGER_DAYS)
+                    print(f"Started Account {len(accounts)} scheduled for {scheduled_start} (first event {current_time})")
+                    last_start_date = last_start_date + pd.Timedelta(days=TIME_TRIGGER_DAYS)
                     waiting_for_recovery = USE_DD_TRIGGER and started_due_to_dd
 
     print(f"\nSimulation complete. Processed {total_events} events, {len(accounts)} accounts.")
@@ -655,7 +661,7 @@ def print_config():
     print(f"TRAILING_DD: {TRAILING_DD}")
     print(f"DD_FREEZE_TRIGGER: {DD_FREEZE_TRIGGER}")
     print(f"FROZEN_DD_FLOOR: {FROZEN_DD_FLOOR}")
-    print(f"USE_PROP_STYLE_DD: {USE_PROP_STYLE_DD}")
+    print(f"USE_TRAILING_DD: {USE_TRAILING_DD}")
     if START_DATE:
         print(f"START_DATE: {START_DATE}")
     if END_DATE:
@@ -675,7 +681,7 @@ df = load_and_preprocess_data(CSV_PATH, START_DATE, END_DATE)
 print(f"\nLoaded {len(df)} trades from {df['Entry_time'].min()} to {df['Exit_time'].max()}")
 
 # For the unified DD plots, we need the prop-style drawdown data
-if USE_PROP_STYLE_DD:
+if USE_TRAILING_DD:
     print("\nComputing prop-style drawdown for visualization...")
     daily_data, full_dd_curve = compute_prop_style_drawdown(df)
     plot_df = daily_data.copy()
@@ -722,7 +728,7 @@ else:
     daily_pnl_for_plots = daily_pnl.to_frame(name='PNL_Daily')
 
 print("\n" + "=" * 60)
-if USE_PROP_STYLE_DD:
+if USE_TRAILING_DD:
     mode = "Prop Firm Trailing DD"
 elif USE_EOD_DRAWDOWN:
     mode = "Prop Firm EOD Threshold"
@@ -732,7 +738,7 @@ else:
 print("SIMULATION MODE:", mode)
 print("=" * 60)
 
-if USE_PROP_STYLE_DD:
+if USE_TRAILING_DD:
     print("\nIMPORTANT ASSUMPTIONS:")
     print("1. Intra-trade sequence: MAE (worst) → MFE (best) → Exit")
     print("   This is the most conservative assumption for blowout testing.")
@@ -790,7 +796,10 @@ axes[1].legend()
 # ============================================
 axes[2].plot(plot_df["Date"], plot_df["DD_Floating"], linewidth=2, label="Floating DD")
 axes[2].axhline(0, linewidth=0.8)
-axes[2].set_title("Floating Drawdown (Prop Style - Includes Intraday)")
+if USE_TRAILING_DD:
+    axes[2].set_title("Floating Drawdown (Includes Intraday MFE-MAE)")
+else:
+    axes[2].set_title("Floating Drawdown (Closed Equity)")
 axes[2].set_xlabel("Date")
 axes[2].set_ylabel("Drawdown ($)")
 axes[2].grid(True)
@@ -1193,7 +1202,7 @@ print("\n" + "=" * 60)
 print("SIMULATION RESULTS")
 print("=" * 60)
 
-print("\nFINAL P&L PER ACCOUNT")
+print("\nFINAL P&L PER ACCOUNT (IF BLOWN - REMOVED FROM EQUITY):")
 print("-" * 60)
 
 for acc in accounts:
@@ -1211,7 +1220,7 @@ number_accounts_alive = sum(1 for acc in accounts if acc['alive'])
 final_portfolio_pnl = portfolio_pnl.iloc[-1] if not portfolio_pnl.empty else 0
 total_capital_deployed = START_CAPITAL * number_accounts_started
 
-print(f"{'Simulation Mode:':<30} {'Prop Firm (Intraday)' if USE_PROP_STYLE_DD else 'Closed Equity'}")
+print(f"{'Simulation Mode:':<30} {'Trailing (Intraday)' if USE_TRAILING_DD else 'Closed Equity'}")
 print(f"{'Final Portfolio P&L:':<30} ${final_portfolio_pnl:,.2f}")
 print(f"{'Total Capital Deployed:':<30} ${total_capital_deployed:,.2f}")
 print(f"{'Return on Capital:':<30} {(final_portfolio_pnl / total_capital_deployed * 100):.1f}%")
@@ -1220,7 +1229,7 @@ print(f"{'Accounts Alive:':<30} {number_accounts_alive}")
 print(f"{'Accounts Blown:':<30} {number_accounts_started - number_accounts_alive}")
 print(f"{'Survival Rate:':<30} {(number_accounts_alive / number_accounts_started * 100):.1f}%")
 
-if USE_PROP_STYLE_DD:
+if USE_TRAILING_DD:
     freeze_triggered_count = 0
 
     for acc in accounts:
