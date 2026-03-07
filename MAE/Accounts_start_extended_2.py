@@ -3,6 +3,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import matplotlib.dates as mdates
 import matplotlib.ticker as mticker
+import matplotlib.ticker as ticker
 from datetime import timedelta
 
 # ========================================================================================
@@ -12,7 +13,7 @@ pd.set_option('display.min_rows', 1000)
 pd.set_option('display.max_rows', 2000)
 pd.set_option('display.max_categories', 10)
 
-CSV_PATH = "databento_all.csv"
+CSV_PATH = "databento_all.csv"  # Path to your CSV file with trade data
 
 # --- Drawdown settings ---
 MAX_DRAWDOWN = 2000
@@ -21,20 +22,20 @@ DD_FREEZE_TRIGGER = START_CAPITAL + MAX_DRAWDOWN + 100
 FROZEN_DD_FLOOR = START_CAPITAL + 100
 
 # --- Date range filter ---
-START_DATE = "2025-01-01"
+START_DATE = None
 END_DATE = None
 
 # ==================================================================
 # --- Simulation Mode ---
 # Exactly ONE of these should be True
 # ==================================================================
-USE_TRAILING_DD   = True   # Live trailing: floor trails highest intraday balance
-USE_EOD_DRAWDOWN  = False    # EOD threshold: floor is set once at market close each day
+USE_TRAILING_DD   = False   # Live trailing: floor trails highest intraday balance
+USE_EOD_DRAWDOWN  = True    # EOD threshold: floor is set once at market close each day
 
 # ==================================================================
 # --- New account start triggers ---
 # ==================================================================
-MAX_ACCOUNTS = 20
+MAX_ACCOUNTS = 500
 USE_TIME_TRIGGER = True
 TIME_TRIGGER_DAYS = 30
 USE_PROFIT_TRIGGER = False
@@ -734,20 +735,58 @@ plt.tight_layout()
 # PORTFOLIO TOTAL PNL PLOT
 # ======================
 
-if SHOW_PORTFOLIO_TOTAL_PNL and not portfolio_pnl.empty:
-    fig_portfolio, ax_portfolio = plt.subplots(figsize=(14, 6))
+# --- Additional portfolio curves ---
+portfolio_all_accounts = acc_pnl_df.sum(axis=1)
 
+portfolio_alive_accounts = acc_pnl_df.copy()
+for acc in accounts:
+    if not acc['alive']:
+        col = f'acc_{acc["id"]}_pnl'
+        if col in portfolio_alive_accounts.columns:
+            portfolio_alive_accounts[col] = np.nan
+
+portfolio_alive_accounts = portfolio_alive_accounts.sum(axis=1)
+
+portfolio_profitable_accounts = acc_pnl_df.copy()
+for col in portfolio_profitable_accounts.columns:
+    portfolio_profitable_accounts[col] = portfolio_profitable_accounts[col].clip(lower=0)
+
+portfolio_profitable_accounts = portfolio_profitable_accounts.sum(axis=1)
+
+if SHOW_PORTFOLIO_TOTAL_PNL and not portfolio_pnl.empty:    # Only plot if we have portfolio data
+    fig_portfolio, ax_portfolio = plt.subplots(figsize=(14, 6))
+    # Strategy PnL (all accounts)
     ax_portfolio.plot(
-        portfolio_pnl.index, portfolio_pnl.values,
-        linewidth=3, color='blue', label="Portfolio Total P&L"
+        portfolio_all_accounts.index,
+        portfolio_all_accounts.values,
+        linewidth=2,
+        color='orange',
+        label="Strategy P&L - all accounts(alive, blown, and in a loss)"
     )
+    # Alive accounts
+    ax_portfolio.plot(
+        portfolio_alive_accounts.index,
+        portfolio_alive_accounts.values,
+        linewidth=3,
+        color='blue',
+        label="Portfolio P&L - alive accounts(in profit and in a loss)"
+    )
+    # Withdrawable profits
+    ax_portfolio.plot(
+        portfolio_profitable_accounts.index,
+        portfolio_profitable_accounts.values,
+        linewidth=2,
+        color='green',
+        label="Withdrawable P&L - profitable accounts - (only in profit)"
+    )
+
     ax_portfolio.axhline(y=0, color='black', linewidth=0.8, alpha=0.5, linestyle='--')
-    ax_portfolio.set_title(f"Portfolio Total P&L — {mode}")
+
+    ax_portfolio.set_title(f"Portfolio P&L Comparison — {mode}")
     ax_portfolio.set_ylabel("P&L ($)")
     ax_portfolio.set_xlabel("Date")
     ax_portfolio.grid(True, alpha=0.3)
     ax_portfolio.legend()
-
     ax_portfolio.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m'))
     ax_portfolio.xaxis.set_major_locator(mdates.MonthLocator(interval=1))
     plt.setp(ax_portfolio.xaxis.get_majorticklabels(), rotation=45)
@@ -827,7 +866,7 @@ ax_daily.bar(
 )
 ax_daily.axhline(y=0, color='black', linewidth=0.8, alpha=0.7)
 
-ax_daily.xaxis.set_major_locator(mdates.DayLocator(interval=5))
+ax_daily.xaxis.set_major_locator(ticker.MaxNLocator(20))
 ax_daily.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m-%d'))
 plt.setp(ax_daily.xaxis.get_majorticklabels(), rotation=60)
 
@@ -1004,45 +1043,71 @@ print("=" * 60)
 print("\nFINAL P&L PER ACCOUNT:")
 print("-" * 60)
 for acc in accounts:
-    status = "ALIVE" if acc['alive'] else "BLOWN"
-    print(f"Account {acc['id']:>2} | Status: {status:<5} | Final P&L: ${acc['pnl']:>8.2f}")
+    status = "ALIVE" if acc['alive'] else "BLOWN \u2B24"
+    print(f"Account {acc['id']:>2} | Status: {status:<8} | Final P&L: ${acc['pnl']:>8.2f}")
 
 print("-" * 60)
 
 number_accounts_started = len(accounts)
 number_accounts_alive   = sum(1 for acc in accounts if acc['alive'])
-final_portfolio_pnl     = portfolio_pnl.iloc[-1] if not portfolio_pnl.empty else 0
-total_capital_deployed  = START_CAPITAL * number_accounts_started
+number_accounts_blown   = number_accounts_started - number_accounts_alive
 
-print(f"{'Simulation Mode:':<30} {mode}")
-print(f"{'Final Portfolio P&L:':<30} ${final_portfolio_pnl:,.2f}")
-print(f"{'Total Capital Deployed:':<30} ${total_capital_deployed:,.2f}")
-print(f"{'Return on Capital:':<30} {(final_portfolio_pnl / total_capital_deployed * 100):.1f}%")
-print(f"{'Accounts Started:':<30} {number_accounts_started}")
-print(f"{'Accounts Alive:':<30} {number_accounts_alive}")
-print(f"{'Accounts Blown:':<30} {number_accounts_started - number_accounts_alive}")
-print(f"{'Survival Rate:':<30} {(number_accounts_alive / number_accounts_started * 100):.1f}%")
+# --- Portfolio metrics ---
+strategy_total_pnl = sum(acc['pnl'] for acc in accounts)
+portfolio_alive_pnl = sum(acc['pnl'] for acc in accounts if acc['alive'])
+portfolio_profitable_pnl = sum(
+    acc['pnl'] for acc in accounts
+    if acc['alive'] and acc['pnl'] > 0
+)
+
+total_capital_deployed = START_CAPITAL * number_accounts_started
+
+print(f"{'Simulation Mode:':<35} {mode}")
+print()
+
+print("PNL OVERVIEW")
+print("-" * 60)
+print(f"{'Portfolio P&L (profitable survivors):':<40} ${portfolio_profitable_pnl:,.2f}")
+print(f"{'Strategy Total P&L (all accounts):':<40} ${strategy_total_pnl:,.2f}")
+print(f"{'Portfolio P&L (alive accounts):':<40} ${portfolio_alive_pnl:,.2f}")
+print()
+
+print("ACCOUNT STATISTICS")
+print("-" * 60)
+print(f"{'Accounts Started:':<35} {number_accounts_started}")
+print(f"{'Accounts Alive:':<35} {number_accounts_alive}")
+print(f"{'Accounts Blown:':<35} {number_accounts_blown}")
+print(f"{'Survival Rate:':<35} {(number_accounts_alive / number_accounts_started * 100):.1f}%")
+
+print()
+
+print("CAPITAL METRICS")
+print("-" * 60)
+print(f"{'Total Capital Deployed:':<35} ${total_capital_deployed:,.2f}")
+print(f"{'Return on Capital (alive PnL):':<35} {(portfolio_profitable_pnl / total_capital_deployed * 100):.1f}%")
 
 freeze_count = sum(1 for acc in accounts if acc['freeze_triggered'])
-print(f"\nBlowout Analysis:")
-print(f"{'Accounts that hit freeze trigger:':<30} {freeze_count}")
-print(f"{'Total Blown Accounts:':<30} {number_accounts_started - number_accounts_alive}")
+
+print("\nBLOWOUT ANALYSIS")
+print("-" * 60)
+print(f"{'Accounts that hit freeze trigger:':<35} {freeze_count}")
+print(f"{'Total Blown Accounts:':<35} {number_accounts_blown}")
 
 print("\n" + "-" * 60)
 print("SINGLE ACCOUNT STRATEGY PERFORMANCE")
 print("-" * 60)
 
 if not monthly_pnl.empty:
-    print(f"{'Monthly P&L Total:':<30} ${monthly_pnl.sum():,.2f}")
-    print(f"{'Monthly Win Rate:':<30} {(monthly_pnl > 0).sum() / len(monthly_pnl) * 100:.1f}%"
+    print(f"{'Monthly P&L Total:':<35} ${monthly_pnl.sum():,.2f}")
+    print(f"{'Monthly Win Rate:':<35} {(monthly_pnl > 0).sum() / len(monthly_pnl) * 100:.1f}%"
           f" ({(monthly_pnl > 0).sum()}/{len(monthly_pnl)})")
-    print(f"{'Best Month:':<30} ${monthly_pnl.max():,.2f}")
-    print(f"{'Average Month:':<30} ${monthly_pnl.mean():,.2f}")
-    print(f"{'Worst Month:':<30} ${monthly_pnl.min():,.2f}")
+    print(f"{'Best Month:':<35} ${monthly_pnl.max():,.2f}")
+    print(f"{'Average Month:':<35} ${monthly_pnl.mean():,.2f}")
+    print(f"{'Worst Month:':<35} ${monthly_pnl.min():,.2f}")
 
 if not yearly_pnl.empty:
-    print(f"{'Yearly P&L Total:':<30} ${yearly_pnl.sum():,.2f}")
-    print(f"{'Yearly Win Rate:':<30} {(yearly_pnl > 0).sum() / len(yearly_pnl) * 100:.1f}%"
+    print(f"{'Yearly P&L Total:':<35} ${yearly_pnl.sum():,.2f}")
+    print(f"{'Yearly Win Rate:':<35} {(yearly_pnl > 0).sum() / len(yearly_pnl) * 100:.1f}%"
           f" ({(yearly_pnl > 0).sum()}/{len(yearly_pnl)})")
 
 if not portfolio_pnl.empty:
@@ -1054,16 +1119,16 @@ if not portfolio_pnl.empty:
     print("-" * 60)
 
     if not portfolio_monthly_pnl.empty:
-        print(f"{'Portfolio Monthly P&L Total:':<30} ${portfolio_monthly_pnl.sum():,.2f}")
-        print(f"{'Portfolio Monthly Win Rate:':<30} {(portfolio_monthly_pnl > 0).sum() / len(portfolio_monthly_pnl) * 100:.1f}%"
+        print(f"{'Portfolio Monthly P&L Total:':<35} ${portfolio_monthly_pnl.sum():,.2f}")
+        print(f"{'Portfolio Monthly Win Rate:':<35} {(portfolio_monthly_pnl > 0).sum() / len(portfolio_monthly_pnl) * 100:.1f}%"
               f" ({(portfolio_monthly_pnl > 0).sum()}/{len(portfolio_monthly_pnl)})")
-        print(f"{'Portfolio Best Month:':<30} ${portfolio_monthly_pnl.max():,.2f}")
-        print(f"{'Portfolio Average Month:':<30} ${portfolio_monthly_pnl.mean():,.2f}")
-        print(f"{'Portfolio Worst Month:':<30} ${portfolio_monthly_pnl.min():,.2f}")
+        print(f"{'Portfolio Best Month:':<35} ${portfolio_monthly_pnl.max():,.2f}")
+        print(f"{'Portfolio Average Month:':<35} ${portfolio_monthly_pnl.mean():,.2f}")
+        print(f"{'Portfolio Worst Month:':<35} ${portfolio_monthly_pnl.min():,.2f}")
 
     if not portfolio_yearly_pnl.empty:
-        print(f"{'Portfolio Yearly P&L Total:':<30} ${portfolio_yearly_pnl.sum():,.2f}")
-        print(f"{'Portfolio Yearly Win Rate:':<30} {(portfolio_yearly_pnl > 0).sum() / len(portfolio_yearly_pnl) * 100:.1f}%"
+        print(f"{'Portfolio Yearly P&L Total:':<35} ${portfolio_yearly_pnl.sum():,.2f}")
+        print(f"{'Portfolio Yearly Win Rate:':<35} {(portfolio_yearly_pnl > 0).sum() / len(portfolio_yearly_pnl) * 100:.1f}%"
               f" ({(portfolio_yearly_pnl > 0).sum()}/{len(portfolio_yearly_pnl)})")
 
 print("\n" + "=" * 60)

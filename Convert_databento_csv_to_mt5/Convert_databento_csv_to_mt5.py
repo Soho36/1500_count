@@ -107,7 +107,7 @@ def build_daily_roll_continuous(
 
 if __name__ == "__main__":
     build_daily_roll_continuous(
-        input_file="F:\\Databento\\GLBX-20260301-NTNNKQHV3N\\databento-ohlcv-1m.csv",
-        output_file="F:\\Databento\\GLBX-20260301-NTNNKQHV3N\\MT5_databento-ohlcv-1m.csv",
+        input_file="F:\\Databento\\mnq_last_days\\glbx-mdp3-20260227-20260305.ohlcv-1m.csv",
+        output_file="F:\\Databento\\mnq_last_days\\mt5_last_days.csv",
         spread=1
     )
