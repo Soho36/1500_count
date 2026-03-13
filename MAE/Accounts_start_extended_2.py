@@ -22,7 +22,7 @@ DD_FREEZE_TRIGGER = START_CAPITAL + MAX_DRAWDOWN + 100
 FROZEN_DD_FLOOR = START_CAPITAL + 100
 
 # --- Date range filter ---
-START_DATE = None
+START_DATE = "2024-01-01"
 END_DATE = None
 
 # ==================================================================
@@ -35,9 +35,9 @@ USE_EOD_DRAWDOWN  = True    # EOD threshold: floor is set once at market close e
 # ==================================================================
 # --- New account start triggers ---
 # ==================================================================
-MAX_ACCOUNTS = 500
+MAX_ACCOUNTS = 100
 USE_TIME_TRIGGER = True
-TIME_TRIGGER_DAYS = 30
+TIME_TRIGGER_DAYS = 15
 USE_PROFIT_TRIGGER = False
 START_IF_PROFIT_THRESHOLD = 1000
 USE_DD_TRIGGER = False

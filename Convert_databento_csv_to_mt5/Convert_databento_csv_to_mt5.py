@@ -48,7 +48,7 @@ def build_daily_roll_continuous(
 
     print("Calculating dominant contract per day...")
     daily_volume = (
-        df.groupby(['trade_date', 'symbol'])['volume']
+        df.groupby(['trade_date', 'symbol'], observed=True)['volume']
           .sum()
           .reset_index()
     )
@@ -107,7 +107,7 @@ def build_daily_roll_continuous(
 
 if __name__ == "__main__":
     build_daily_roll_continuous(
-        input_file="F:\\Databento\\mnq_last_days\\glbx-mdp3-20260227-20260305.ohlcv-1m.csv",
-        output_file="F:\\Databento\\mnq_last_days\\mt5_last_days.csv",
+        input_file="F:\DATABENTO\MBT\glbx-mdp3-20100606-20260309.ohlcv-1m.csv.zst",
+        output_file="F:\\Databento\\MBT\\mbt_mt5_converted.csv",
         spread=1
     )
