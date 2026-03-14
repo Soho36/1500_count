@@ -38,10 +38,15 @@ def build_daily_roll_continuous(
         utc=True
     )
 
-    # Convert to your local timezone (Estonia)
-    print("Converting to local timezone (Europe/Tallinn)...")
-    df['ts_event'] = df['ts_event'].dt.tz_convert('Europe/Tallinn')
+    # Convert to Exchange timezone to align with session times
+    print("Converting to timezone (America/Chicago)...")
+
+    # Step 1: convert with US DST rules applied
+    df['ts_event'] = df['ts_event'].dt.tz_convert('America/Chicago')
     df['ts_event'] = df['ts_event'].dt.tz_localize(None)
+
+    # Step 2: shift forward by fixed hours to put session close at 23:59 to match MT5's charts
+    df['ts_event'] = df['ts_event'] + pd.Timedelta(hours=8)
 
     print("Extracting dates...")
     df['trade_date'] = df['ts_event'].dt.date
@@ -106,8 +111,11 @@ def build_daily_roll_continuous(
 
 
 if __name__ == "__main__":
+    in_file = "C:/Source/DATABENTO/MNQ/last_month-1m.csv"
+    input_filename = in_file.split("/")[-1].split(".")[0]  # Extract filename
+    out_file = f"C:/Source/DATABENTO/MNQ/MT5_{input_filename}_converted.csv"
     build_daily_roll_continuous(
-        input_file="F:\DATABENTO\MBT\glbx-mdp3-20100606-20260309.ohlcv-1m.csv.zst",
-        output_file="F:\\Databento\\MBT\\mbt_mt5_converted.csv",
+        input_file=in_file,
+        output_file=out_file,
         spread=1
     )
