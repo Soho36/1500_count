@@ -16,14 +16,14 @@ pd.set_option('display.max_categories', 10)
 CSV_PATH = "databento_all.csv"  # Path to your CSV file with trade data
 
 # --- Drawdown settings ---
+START_CAPITAL = 2000
 MAX_DRAWDOWN = 2000
-START_CAPITAL = MAX_DRAWDOWN
-EQUITY_DD_FREEZE_TRIGGER = START_CAPITAL + MAX_DRAWDOWN + 100
-FROZEN_DD_FLOOR = START_CAPITAL + 100
+equity_dd_freeze_trigger = START_CAPITAL + MAX_DRAWDOWN + 100
+frozen_dd_floor = START_CAPITAL + 100
 
 # --- Date range filter ---
-START_DATE = "2020-01-01"
-END_DATE = "2021-05-05"
+START_DATE = "2025-02-01"
+END_DATE = None
 
 # ==================================================================
 # --- Simulation Mode ---
@@ -35,7 +35,7 @@ USE_EOD_DRAWDOWN  = False    # EOD threshold: floor is set once at market close 
 # ==================================================================
 # --- New account start triggers ---
 # ==================================================================
-MAX_ACCOUNTS = 2
+MAX_ACCOUNTS = 10
 USE_TIME_TRIGGER = True
 TIME_TRIGGER_DAYS = 15
 USE_PROFIT_TRIGGER = False
@@ -45,11 +45,19 @@ START_IF_DD_THRESHOLD = 400
 RECOVERY_LEVEL = 0
 MIN_DAYS_BETWEEN_STARTS = 1
 
+# ==================================================================
+#  PLOTS SWITCHES
+# ==================================================================
 SHOW_PORTFOLIO_TOTAL_PNL = True
 SHOW_DD_PLOT = True
+SHOW_SINGLE_ACCOUNT_DAILY_PNL_PLOT = False
+SHOW_SINGLE_ACCOUNT_MONTHLY_PNL_PLOT = False
+SHOW_SINGLE_ACCOUNT_YEARLY_PNL_PLOT = False
+SHOW_PORTFOLIO_MONTHLY_PNL_PLOT = False
+SHOW_PORTFOLIO_YEARLY_PNL_PLOT = False
 
 # ==================================================================
-#  SIMULATION ASSUMPTIONS (IMPORTANT!)
+#  SIMULATION ASSUMPTIONS
 # ==================================================================
 """
 KEY ASSUMPTIONS FOR PROP STYLE SIMULATION:
@@ -331,7 +339,7 @@ def simulate_accounts_with_prop_dd_optimized(events_df, start_capital, max_accou
                 if USE_TRAILING_DD:
                     # Floor trails the intraday peak
                     floor = (
-                        FROZEN_DD_FLOOR
+                        frozen_dd_floor
                         if acc['freeze_triggered']
                         else acc['peak'] - MAX_DRAWDOWN
                     )
@@ -367,7 +375,7 @@ def simulate_accounts_with_prop_dd_optimized(events_df, start_capital, max_accou
                     temp_equity = acc['current_trade_start_equity'] + event_mfe[event_idx]
                     if temp_equity > acc['peak']:
                         acc['peak'] = temp_equity
-                        if acc['peak'] >= EQUITY_DD_FREEZE_TRIGGER:
+                        if acc['peak'] >= equity_dd_freeze_trigger:
                             acc['freeze_triggered'] = True
 
                 # EOD mode: MFE does NOT update the floor — it's purely a closing-balance system
@@ -388,11 +396,11 @@ def simulate_accounts_with_prop_dd_optimized(events_df, start_capital, max_accou
                 if USE_TRAILING_DD:
                     if acc['equity'] > acc['peak']:
                         acc['peak'] = acc['equity']
-                        if acc['peak'] >= EQUITY_DD_FREEZE_TRIGGER:
+                        if acc['peak'] >= equity_dd_freeze_trigger:
                             acc['freeze_triggered'] = True
 
                     floor = (
-                        FROZEN_DD_FLOOR
+                        frozen_dd_floor
                         if acc['freeze_triggered']
                         else acc['peak'] - MAX_DRAWDOWN
                     )
@@ -450,9 +458,9 @@ def simulate_accounts_with_prop_dd_optimized(events_df, start_capital, max_accou
                         # Update peak closing equity
                         acc['eod_peak_closing'] = max(acc['eod_peak_closing'], closing_eq)
                         # Check freeze trigger based on peak closing equity
-                        if acc['eod_peak_closing'] >= EQUITY_DD_FREEZE_TRIGGER:
+                        if acc['eod_peak_closing'] >= equity_dd_freeze_trigger:
                             acc['freeze_triggered'] = True
-                            acc['eod_dd_floor'] = FROZEN_DD_FLOOR
+                            acc['eod_dd_floor'] = frozen_dd_floor
                             print(f"Account {acc['id']} FREEZE triggered at session open on {current_day} | "
                                   f"peak_closing={acc['eod_peak_closing']:.2f}")
                         else:
@@ -574,8 +582,8 @@ def simulate_accounts_closed_dd(pl_series, start_capital, max_accounts):
                 acc['rolling_max']  = max(acc['rolling_max'], acc['equity'])
 
                 floor = (
-                    FROZEN_DD_FLOOR
-                    if acc['rolling_max'] >= EQUITY_DD_FREEZE_TRIGGER
+                    frozen_dd_floor
+                    if acc['rolling_max'] >= equity_dd_freeze_trigger
                     else acc['rolling_max'] - MAX_DRAWDOWN
                 )
                 if acc['equity'] <= floor:
@@ -615,8 +623,8 @@ def print_config():
     print(f"Mode:              {mode}")
     print(f"START_CAPITAL:     {START_CAPITAL}")
     print(f"TRAILING_DD:       {MAX_DRAWDOWN}")
-    print(f"DD_FREEZE_TRIGGER: {EQUITY_DD_FREEZE_TRIGGER}")
-    print(f"FROZEN_DD_FLOOR:   {FROZEN_DD_FLOOR}")
+    print(f"DD_FREEZE_TRIGGER: {equity_dd_freeze_trigger}")
+    print(f"FROZEN_DD_FLOOR:   {frozen_dd_floor}")
     if START_DATE: print(f"START_DATE:        {START_DATE}")
     if END_DATE:   print(f"END_DATE:          {END_DATE}")
     print(f"MAX_ACCOUNTS:      {MAX_ACCOUNTS}")
@@ -685,7 +693,7 @@ if USE_EOD_DRAWDOWN:
     print("1. DD floor is calculated ONCE per day at market close: close_equity - TRAILING_DD")
     print("2. Floor is FIXED for the entire next session (does not trail intraday)")
     print("3. Floor is still enforced in real-time: MAE touching floor = blown intraday")
-    print(f"4. Freeze trigger: once peak closing equity >= {EQUITY_DD_FREEZE_TRIGGER}, floor frozen at {FROZEN_DD_FLOOR}")
+    print(f"4. Freeze trigger: once peak closing equity >= {equity_dd_freeze_trigger}, floor frozen at {frozen_dd_floor}")
     print("=" * 60)
 
 events_df = create_trade_events_with_priority(df)
@@ -810,13 +818,16 @@ if not acc_pnl_df.empty:
     ax_accounts.set_title(f"Individual Accounts P&L — {mode}")
     ax_accounts.set_ylabel("P&L ($)")
     ax_accounts.set_xlabel("Date")
+    ax_accounts.yaxis.set_major_formatter(
+        mticker.StrMethodFormatter('{x:,.0f}')
+    )
     ax_accounts.grid(True, alpha=0.3)
     ax_accounts.axhline(y=0, color='black', linewidth=0.8, alpha=0.5, linestyle='--')
 
     ax_accounts.axhline(
-        y=FROZEN_DD_FLOOR,
+        y=frozen_dd_floor,
         color='red', linewidth=2, linestyle='--', alpha=0.8,
-        label=f'Frozen DD floor (equity={FROZEN_DD_FLOOR})'
+        label=f'Frozen DD floor (equity={frozen_dd_floor})'
     )
 
     ax_accounts.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m'))
@@ -855,6 +866,7 @@ if not num_alive_df.empty:
 # CHART 0: DAILY P&L (Single Account Strategy)
 # ============================================================
 
+
 daily_pnl_series = daily_pnl_for_plots['PNL_Daily']
 
 fig_daily, ax_daily = plt.subplots(figsize=(16, 6))
@@ -886,7 +898,9 @@ textstr = f'Total: ${total_daily:,.0f} | Win Rate: {win_rate_daily:.1f}% ({posit
 ax_daily.text(0.02, 0.98, textstr, transform=ax_daily.transAxes,
               fontsize=10, verticalalignment='top',
               bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.5))
-plt.tight_layout()
+
+if SHOW_SINGLE_ACCOUNT_DAILY_PNL_PLOT:
+    plt.tight_layout()
 
 # ============================================================
 # CHART 1: MONTHLY P&L (Single Account Strategy)
@@ -923,7 +937,9 @@ textstr = f'Total: ${total_pnl:,.0f} | Win Rate: {win_rate:.1f}% ({positive_mont
 ax_monthly.text(0.02, 0.98, textstr, transform=ax_monthly.transAxes,
                 fontsize=10, verticalalignment='top',
                 bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.5))
-plt.tight_layout()
+
+if SHOW_SINGLE_ACCOUNT_MONTHLY_PNL_PLOT:
+    plt.tight_layout()
 
 # ============================================================
 # CHART 2: YEARLY P&L (Single Account Strategy)
@@ -957,7 +973,8 @@ textstr = f'Total: ${total_pnl_yearly:,.0f} | Avg: ${avg_yearly:,.0f} | Win Rate
 ax_yearly.text(0.02, 0.98, textstr, transform=ax_yearly.transAxes,
                fontsize=10, verticalalignment='top',
                bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.5))
-plt.tight_layout()
+if SHOW_SINGLE_ACCOUNT_YEARLY_PNL_PLOT:
+    plt.tight_layout()
 
 # ============================================================
 # CHART 3: PORTFOLIO MONTHLY P&L
@@ -996,7 +1013,8 @@ if not portfolio_pnl.empty:
     ax_portfolio_monthly.text(0.02, 0.98, textstr, transform=ax_portfolio_monthly.transAxes,
                               fontsize=10, verticalalignment='top',
                               bbox=dict(boxstyle='round', facecolor='lightblue', alpha=0.5))
-    plt.tight_layout()
+    if SHOW_PORTFOLIO_MONTHLY_PNL_PLOT:
+        plt.tight_layout()
 
 # ============================================================
 # CHART 4: PORTFOLIO YEARLY P&L
@@ -1031,7 +1049,8 @@ if not portfolio_pnl.empty:
     ax_portfolio_yearly.text(0.02, 0.98, textstr, transform=ax_portfolio_yearly.transAxes,
                              fontsize=10, verticalalignment='top',
                              bbox=dict(boxstyle='round', facecolor='lightblue', alpha=0.5))
-    plt.tight_layout()
+    if SHOW_PORTFOLIO_YEARLY_PNL_PLOT:
+        plt.tight_layout()
 
 # ======================
 #  STATISTICS
@@ -1084,7 +1103,11 @@ print()
 print("CAPITAL METRICS")
 print("-" * 60)
 print(f"{'Total Capital Deployed:':<35} ${total_capital_deployed:,.2f}")
-print(f"{'Return on Capital (alive PnL):':<35} {(portfolio_profitable_pnl / total_capital_deployed * 100):.1f}%")
+try:
+    print(f"{'Return on Capital (alive PnL):':<35} {(portfolio_profitable_pnl / total_capital_deployed * 100):.1f}%")
+
+except ZeroDivisionError:
+    print(f"{'Return on Capital (alive PnL):':<35} N/A (no capital deployed or blown)")
 
 freeze_count = sum(1 for acc in accounts if acc['freeze_triggered'])
 
