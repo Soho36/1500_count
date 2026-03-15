@@ -18,24 +18,24 @@ CSV_PATH = "databento_all.csv"  # Path to your CSV file with trade data
 # --- Drawdown settings ---
 MAX_DRAWDOWN = 2000
 START_CAPITAL = MAX_DRAWDOWN
-DD_FREEZE_TRIGGER = START_CAPITAL + MAX_DRAWDOWN + 100
+EQUITY_DD_FREEZE_TRIGGER = START_CAPITAL + MAX_DRAWDOWN + 100
 FROZEN_DD_FLOOR = START_CAPITAL + 100
 
 # --- Date range filter ---
-START_DATE = "2024-01-01"
-END_DATE = None
+START_DATE = "2020-01-01"
+END_DATE = "2021-05-05"
 
 # ==================================================================
 # --- Simulation Mode ---
 # Exactly ONE of these should be True
 # ==================================================================
-USE_TRAILING_DD   = False   # Live trailing: floor trails highest intraday balance
-USE_EOD_DRAWDOWN  = True    # EOD threshold: floor is set once at market close each day
+USE_TRAILING_DD   = True   # Live trailing: floor trails highest intraday balance
+USE_EOD_DRAWDOWN  = False    # EOD threshold: floor is set once at market close each day
 
 # ==================================================================
 # --- New account start triggers ---
 # ==================================================================
-MAX_ACCOUNTS = 100
+MAX_ACCOUNTS = 2
 USE_TIME_TRIGGER = True
 TIME_TRIGGER_DAYS = 15
 USE_PROFIT_TRIGGER = False
@@ -367,7 +367,7 @@ def simulate_accounts_with_prop_dd_optimized(events_df, start_capital, max_accou
                     temp_equity = acc['current_trade_start_equity'] + event_mfe[event_idx]
                     if temp_equity > acc['peak']:
                         acc['peak'] = temp_equity
-                        if acc['peak'] >= DD_FREEZE_TRIGGER:
+                        if acc['peak'] >= EQUITY_DD_FREEZE_TRIGGER:
                             acc['freeze_triggered'] = True
 
                 # EOD mode: MFE does NOT update the floor — it's purely a closing-balance system
@@ -388,7 +388,7 @@ def simulate_accounts_with_prop_dd_optimized(events_df, start_capital, max_accou
                 if USE_TRAILING_DD:
                     if acc['equity'] > acc['peak']:
                         acc['peak'] = acc['equity']
-                        if acc['peak'] >= DD_FREEZE_TRIGGER:
+                        if acc['peak'] >= EQUITY_DD_FREEZE_TRIGGER:
                             acc['freeze_triggered'] = True
 
                     floor = (
@@ -450,7 +450,7 @@ def simulate_accounts_with_prop_dd_optimized(events_df, start_capital, max_accou
                         # Update peak closing equity
                         acc['eod_peak_closing'] = max(acc['eod_peak_closing'], closing_eq)
                         # Check freeze trigger based on peak closing equity
-                        if acc['eod_peak_closing'] >= DD_FREEZE_TRIGGER:
+                        if acc['eod_peak_closing'] >= EQUITY_DD_FREEZE_TRIGGER:
                             acc['freeze_triggered'] = True
                             acc['eod_dd_floor'] = FROZEN_DD_FLOOR
                             print(f"Account {acc['id']} FREEZE triggered at session open on {current_day} | "
@@ -575,7 +575,7 @@ def simulate_accounts_closed_dd(pl_series, start_capital, max_accounts):
 
                 floor = (
                     FROZEN_DD_FLOOR
-                    if acc['rolling_max'] >= DD_FREEZE_TRIGGER
+                    if acc['rolling_max'] >= EQUITY_DD_FREEZE_TRIGGER
                     else acc['rolling_max'] - MAX_DRAWDOWN
                 )
                 if acc['equity'] <= floor:
@@ -615,7 +615,7 @@ def print_config():
     print(f"Mode:              {mode}")
     print(f"START_CAPITAL:     {START_CAPITAL}")
     print(f"TRAILING_DD:       {MAX_DRAWDOWN}")
-    print(f"DD_FREEZE_TRIGGER: {DD_FREEZE_TRIGGER}")
+    print(f"DD_FREEZE_TRIGGER: {EQUITY_DD_FREEZE_TRIGGER}")
     print(f"FROZEN_DD_FLOOR:   {FROZEN_DD_FLOOR}")
     if START_DATE: print(f"START_DATE:        {START_DATE}")
     if END_DATE:   print(f"END_DATE:          {END_DATE}")
@@ -685,7 +685,7 @@ if USE_EOD_DRAWDOWN:
     print("1. DD floor is calculated ONCE per day at market close: close_equity - TRAILING_DD")
     print("2. Floor is FIXED for the entire next session (does not trail intraday)")
     print("3. Floor is still enforced in real-time: MAE touching floor = blown intraday")
-    print(f"4. Freeze trigger: once peak closing equity >= {DD_FREEZE_TRIGGER}, floor frozen at {FROZEN_DD_FLOOR}")
+    print(f"4. Freeze trigger: once peak closing equity >= {EQUITY_DD_FREEZE_TRIGGER}, floor frozen at {FROZEN_DD_FLOOR}")
     print("=" * 60)
 
 events_df = create_trade_events_with_priority(df)
