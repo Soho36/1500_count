@@ -16,8 +16,8 @@ pd.set_option('display.max_categories', 10)
 CSV_PATH = "databento_all.csv"  # Path to your CSV file with trade data
 
 # --- Drawdown settings ---
-START_CAPITAL = 2000
-MAX_DRAWDOWN = 2000
+START_CAPITAL = 3000
+MAX_DRAWDOWN = 3000
 equity_dd_freeze_trigger = START_CAPITAL + MAX_DRAWDOWN + 100
 frozen_dd_floor = START_CAPITAL + 100
 
@@ -719,6 +719,8 @@ if UNIFIED_EQUITY_AND_DD_PLOTS_3:
     axes[0].plot(plot_df["Date"], plot_df["Equity"],      linewidth=2, label="Equity")
     axes[0].plot(plot_df["Date"], plot_df["Equity_Peak"], linewidth=1, label="Equity_Peak")
     axes[0].plot(plot_df["Date"], plot_df["Equity_Low"],  linewidth=1, label="Equity_Low")
+    axes[0].yaxis.set_major_formatter(mticker.StrMethodFormatter('{x:,.0f}'))
+    axes[0].xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m-%d'))
     axes[0].set_title("Equity Curve (Single Account Strategy)")
     axes[0].set_ylabel("Equity ($)")
     axes[0].grid(True)
@@ -726,6 +728,8 @@ if UNIFIED_EQUITY_AND_DD_PLOTS_3:
 
     axes[1].plot(plot_df["Date"], plot_df["DD_Closed"], linewidth=2, label="Closed DD")
     axes[1].axhline(0, linewidth=0.8)
+    axes[1].yaxis.set_major_formatter(mticker.StrMethodFormatter('{x:,.0f}'))
+    axes[1].xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m-%d'))
     axes[1].set_title("Closed Equity Drawdown")
     axes[1].set_ylabel("Drawdown ($)")
     axes[1].grid(True)
@@ -733,6 +737,8 @@ if UNIFIED_EQUITY_AND_DD_PLOTS_3:
 
     axes[2].plot(plot_df["Date"], plot_df["DD_Floating"], linewidth=2, label="Floating DD")
     axes[2].axhline(0, linewidth=0.8)
+    axes[2].yaxis.set_major_formatter(mticker.StrMethodFormatter('{x:,.0f}'))
+    axes[2].xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m-%d'))
     axes[2].set_title("Floating Drawdown (Includes Intraday MAE/MFE)")
     axes[2].set_xlabel("Date")
     axes[2].set_ylabel("Drawdown ($)")
@@ -740,9 +746,10 @@ if UNIFIED_EQUITY_AND_DD_PLOTS_3:
     axes[2].legend()
 
     axes[2].xaxis.set_major_locator(mdates.MonthLocator(interval=1))
-    axes[2].xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m'))
     plt.setp(axes[2].xaxis.get_majorticklabels(), rotation=45)
+
     plt.tight_layout()
+
 
 # ======================
 # PORTFOLIO TOTAL PNL PLOT
@@ -800,8 +807,9 @@ if PORTFOLIO_TOTAL_PNL_PLOT and not portfolio_pnl.empty:    # Only plot if we ha
     ax_portfolio.set_xlabel("Date")
     ax_portfolio.grid(True, alpha=0.3)
     ax_portfolio.legend()
-    ax_portfolio.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m'))
+    ax_portfolio.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m-%d'))
     ax_portfolio.xaxis.set_major_locator(mdates.MonthLocator(interval=1))
+    ax_portfolio.yaxis.set_major_formatter(mticker.StrMethodFormatter('{x:,.0f}'))
     plt.setp(ax_portfolio.xaxis.get_majorticklabels(), rotation=45)
     plt.tight_layout()
 
@@ -834,8 +842,7 @@ if STARTED_ACCOUNTS_PNL_PLOT and not acc_pnl_df.empty:
         color='red', linewidth=2, linestyle='--', alpha=0.8,
         label=f'Frozen DD floor (equity={frozen_dd_floor})'
     )
-
-    ax_accounts.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m'))
+    ax_accounts.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m-%d'))
     ax_accounts.xaxis.set_major_locator(mdates.MonthLocator(interval=1))
     plt.setp(ax_accounts.xaxis.get_majorticklabels(), rotation=45)
     ax_accounts.legend()
