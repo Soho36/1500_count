@@ -48,8 +48,12 @@ MIN_DAYS_BETWEEN_STARTS = 1
 # ==================================================================
 #  PLOTS SWITCHES
 # ==================================================================
-SHOW_PORTFOLIO_TOTAL_PNL = True
-SHOW_DD_PLOT = True
+# Line plots
+UNIFIED_EQUITY_AND_DD_PLOTS_3 = True
+STARTED_ACCOUNTS_PNL_PLOT = True
+PORTFOLIO_TOTAL_PNL_PLOT = True
+NUMBER_OF_ACTIVE_ACCOUNTS_OVER_TIME_PLOT = False
+# Bar plots
 SHOW_SINGLE_ACCOUNT_DAILY_PNL_PLOT = False
 SHOW_SINGLE_ACCOUNT_MONTHLY_PNL_PLOT = False
 SHOW_SINGLE_ACCOUNT_YEARLY_PNL_PLOT = False
@@ -709,35 +713,36 @@ portfolio_pnl, acc_pnl_df, num_alive_df, accounts = simulate_accounts_with_prop_
 # UNIFIED EQUITY + DD PLOTS (Single Account Strategy)
 # ============================================================
 
-fig, axes = plt.subplots(3, 1, figsize=(12, 10), sharex=True)
+if UNIFIED_EQUITY_AND_DD_PLOTS_3:
+    fig, axes = plt.subplots(3, 1, figsize=(12, 10), sharex=True)
 
-axes[0].plot(plot_df["Date"], plot_df["Equity"],      linewidth=2, label="Equity")
-axes[0].plot(plot_df["Date"], plot_df["Equity_Peak"], linewidth=1, label="Equity_Peak")
-axes[0].plot(plot_df["Date"], plot_df["Equity_Low"],  linewidth=1, label="Equity_Low")
-axes[0].set_title("Equity Curve (Single Account Strategy)")
-axes[0].set_ylabel("Equity ($)")
-axes[0].grid(True)
-axes[0].legend()
+    axes[0].plot(plot_df["Date"], plot_df["Equity"],      linewidth=2, label="Equity")
+    axes[0].plot(plot_df["Date"], plot_df["Equity_Peak"], linewidth=1, label="Equity_Peak")
+    axes[0].plot(plot_df["Date"], plot_df["Equity_Low"],  linewidth=1, label="Equity_Low")
+    axes[0].set_title("Equity Curve (Single Account Strategy)")
+    axes[0].set_ylabel("Equity ($)")
+    axes[0].grid(True)
+    axes[0].legend()
 
-axes[1].plot(plot_df["Date"], plot_df["DD_Closed"], linewidth=2, label="Closed DD")
-axes[1].axhline(0, linewidth=0.8)
-axes[1].set_title("Closed Equity Drawdown")
-axes[1].set_ylabel("Drawdown ($)")
-axes[1].grid(True)
-axes[1].legend()
+    axes[1].plot(plot_df["Date"], plot_df["DD_Closed"], linewidth=2, label="Closed DD")
+    axes[1].axhline(0, linewidth=0.8)
+    axes[1].set_title("Closed Equity Drawdown")
+    axes[1].set_ylabel("Drawdown ($)")
+    axes[1].grid(True)
+    axes[1].legend()
 
-axes[2].plot(plot_df["Date"], plot_df["DD_Floating"], linewidth=2, label="Floating DD")
-axes[2].axhline(0, linewidth=0.8)
-axes[2].set_title("Floating Drawdown (Includes Intraday MAE/MFE)")
-axes[2].set_xlabel("Date")
-axes[2].set_ylabel("Drawdown ($)")
-axes[2].grid(True)
-axes[2].legend()
+    axes[2].plot(plot_df["Date"], plot_df["DD_Floating"], linewidth=2, label="Floating DD")
+    axes[2].axhline(0, linewidth=0.8)
+    axes[2].set_title("Floating Drawdown (Includes Intraday MAE/MFE)")
+    axes[2].set_xlabel("Date")
+    axes[2].set_ylabel("Drawdown ($)")
+    axes[2].grid(True)
+    axes[2].legend()
 
-axes[2].xaxis.set_major_locator(mdates.MonthLocator(interval=1))
-axes[2].xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m'))
-plt.setp(axes[2].xaxis.get_majorticklabels(), rotation=45)
-plt.tight_layout()
+    axes[2].xaxis.set_major_locator(mdates.MonthLocator(interval=1))
+    axes[2].xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m'))
+    plt.setp(axes[2].xaxis.get_majorticklabels(), rotation=45)
+    plt.tight_layout()
 
 # ======================
 # PORTFOLIO TOTAL PNL PLOT
@@ -761,7 +766,7 @@ for col in portfolio_profitable_accounts.columns:
 
 portfolio_profitable_accounts = portfolio_profitable_accounts.sum(axis=1)
 
-if SHOW_PORTFOLIO_TOTAL_PNL and not portfolio_pnl.empty:    # Only plot if we have portfolio data
+if PORTFOLIO_TOTAL_PNL_PLOT and not portfolio_pnl.empty:    # Only plot if we have portfolio data
     fig_portfolio, ax_portfolio = plt.subplots(figsize=(14, 6))
     # Strategy PnL (all accounts)
     ax_portfolio.plot(
@@ -804,7 +809,7 @@ if SHOW_PORTFOLIO_TOTAL_PNL and not portfolio_pnl.empty:    # Only plot if we ha
 # INDIVIDUAL ACCOUNTS P&L PLOT
 # ======================
 
-if not acc_pnl_df.empty:
+if STARTED_ACCOUNTS_PNL_PLOT and not acc_pnl_df.empty:
     fig_accounts, ax_accounts = plt.subplots(figsize=(14, 6))
     number_accounts_started = len(accounts)
 
@@ -840,7 +845,7 @@ if not acc_pnl_df.empty:
 # ACCOUNT STATUS OVER TIME
 # ======================
 
-if not num_alive_df.empty:
+if NUMBER_OF_ACTIVE_ACCOUNTS_OVER_TIME_PLOT and not num_alive_df.empty:
     fig3, ax5 = plt.subplots(1, 1, figsize=(14, 6))
     number_accounts_started = len(accounts)
 
@@ -866,121 +871,126 @@ if not num_alive_df.empty:
 # CHART 0: DAILY P&L (Single Account Strategy)
 # ============================================================
 
-
-daily_pnl_series = daily_pnl_for_plots['PNL_Daily']
-
-fig_daily, ax_daily = plt.subplots(figsize=(16, 6))
-colors = ['green' if x >= 0 else 'red' for x in daily_pnl_series.values]
-
-ax_daily.bar(
-    daily_pnl_series.index, daily_pnl_series.values,
-    color=colors, alpha=0.7, edgecolor='black', linewidth=0.3
-)
-ax_daily.axhline(y=0, color='black', linewidth=0.8, alpha=0.7)
-
-ax_daily.xaxis.set_major_locator(ticker.MaxNLocator(20))
-ax_daily.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m-%d'))
-plt.setp(ax_daily.xaxis.get_majorticklabels(), rotation=60)
-
-ax_daily.yaxis.set_major_formatter(mticker.StrMethodFormatter('${x:,.0f}'))
-ax_daily.yaxis.set_major_locator(mticker.MultipleLocator(50))
-
-ax_daily.set_title("Single Account Strategy - Daily P&L", fontsize=14, fontweight='bold')
-ax_daily.set_ylabel("P&L ($)")
-ax_daily.set_xlabel("Date")
-ax_daily.grid(True, alpha=0.3, axis='y')
-
-total_daily    = daily_pnl_series.sum()
-positive_days  = (daily_pnl_series > 0).sum()
-win_rate_daily = positive_days / len(daily_pnl_series) * 100 if len(daily_pnl_series) > 0 else 0
-
-textstr = f'Total: ${total_daily:,.0f} | Win Rate: {win_rate_daily:.1f}% ({positive_days}/{len(daily_pnl_series)})'
-ax_daily.text(0.02, 0.98, textstr, transform=ax_daily.transAxes,
-              fontsize=10, verticalalignment='top',
-              bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.5))
-
 if SHOW_SINGLE_ACCOUNT_DAILY_PNL_PLOT:
+    daily_pnl_series = daily_pnl_for_plots['PNL_Daily']
+
+    fig_daily, ax_daily = plt.subplots(figsize=(16, 6))
+    colors = ['green' if x >= 0 else 'red' for x in daily_pnl_series.values]
+
+    ax_daily.bar(
+        daily_pnl_series.index, daily_pnl_series.values,
+        color=colors, alpha=0.7, edgecolor='black', linewidth=0.3
+    )
+    ax_daily.axhline(y=0, color='black', linewidth=0.8, alpha=0.7)
+
+    ax_daily.xaxis.set_major_locator(ticker.MaxNLocator(20))
+    ax_daily.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m-%d'))
+    plt.setp(ax_daily.xaxis.get_majorticklabels(), rotation=60)
+
+    ax_daily.yaxis.set_major_formatter(mticker.StrMethodFormatter('${x:,.0f}'))
+    ax_daily.yaxis.set_major_locator(mticker.MultipleLocator(50))
+
+    ax_daily.set_title("Single Account Strategy - Daily P&L", fontsize=14, fontweight='bold')
+    ax_daily.set_ylabel("P&L ($)")
+    ax_daily.set_xlabel("Date")
+    ax_daily.grid(True, alpha=0.3, axis='y')
+    total_daily = daily_pnl_series.sum()
+    positive_days = (daily_pnl_series > 0).sum()
+    win_rate_daily = positive_days / len(daily_pnl_series) * 100 if len(daily_pnl_series) > 0 else 0
+
+    textstr = f'Total: ${total_daily:,.0f} | Win Rate: {win_rate_daily:.1f}% ({positive_days}/{len(daily_pnl_series)})'
+    ax_daily.text(0.02, 0.98, textstr, transform=ax_daily.transAxes,
+                  fontsize=10, verticalalignment='top',
+                  bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.5))
+
     plt.tight_layout()
 
 # ============================================================
 # CHART 1: MONTHLY P&L (Single Account Strategy)
 # ============================================================
 
-monthly_pnl = daily_pnl_for_plots.resample('M')['PNL_Daily'].sum()
-
-fig_monthly, ax_monthly = plt.subplots(figsize=(14, 6))
-colors = ['green' if x >= 0 else 'red' for x in monthly_pnl.values]
-bars   = ax_monthly.bar(monthly_pnl.index, monthly_pnl.values,
-                        color=colors, alpha=0.7, edgecolor='black', linewidth=0.5)
-ax_monthly.axhline(y=0, color='black', linewidth=0.8, alpha=0.7)
-
-ax_monthly.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m'))
-ax_monthly.xaxis.set_major_locator(mdates.MonthLocator(interval=1))
-plt.setp(ax_monthly.xaxis.get_majorticklabels(), rotation=45)
-
-for bar in bars:
-    height = bar.get_height()
-    label_pos = height + (monthly_pnl.max() * 0.01) if height >= 0 else height - (monthly_pnl.max() * 0.01)
-    ax_monthly.text(bar.get_x() + bar.get_width() / 2., label_pos,
-                    f'${height:,.0f}', ha='center',
-                    va='bottom' if height >= 0 else 'top', fontsize=8, rotation=45)
-
-ax_monthly.set_title("Single Account Strategy - Monthly P&L", fontsize=14, fontweight='bold')
-ax_monthly.set_ylabel("P&L ($)")
-ax_monthly.set_xlabel("Date")
-ax_monthly.grid(True, alpha=0.3, axis='y')
-
-total_pnl       = monthly_pnl.sum()
-positive_months = (monthly_pnl > 0).sum()
-win_rate        = positive_months / len(monthly_pnl) * 100 if len(monthly_pnl) > 0 else 0
-textstr = f'Total: ${total_pnl:,.0f} | Win Rate: {win_rate:.1f}% ({positive_months}/{len(monthly_pnl)})'
-ax_monthly.text(0.02, 0.98, textstr, transform=ax_monthly.transAxes,
-                fontsize=10, verticalalignment='top',
-                bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.5))
-
 if SHOW_SINGLE_ACCOUNT_MONTHLY_PNL_PLOT:
+    monthly_pnl = daily_pnl_for_plots.resample('M')['PNL_Daily'].sum()
+
+    fig_monthly, ax_monthly = plt.subplots(figsize=(14, 6))
+    colors = ['green' if x >= 0 else 'red' for x in monthly_pnl.values]
+    bars   = ax_monthly.bar(monthly_pnl.index, monthly_pnl.values,
+                            color=colors, alpha=0.7, edgecolor='black', linewidth=0.5)
+    ax_monthly.axhline(y=0, color='black', linewidth=0.8, alpha=0.7)
+
+    ax_monthly.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m'))
+    ax_monthly.xaxis.set_major_locator(mdates.MonthLocator(interval=1))
+    plt.setp(ax_monthly.xaxis.get_majorticklabels(), rotation=45)
+
+    for bar in bars:
+        height = bar.get_height()
+        label_pos = height + (monthly_pnl.max() * 0.01) if height >= 0 else height - (monthly_pnl.max() * 0.01)
+        ax_monthly.text(bar.get_x() + bar.get_width() / 2., label_pos,
+                        f'${height:,.0f}', ha='center',
+                        va='bottom' if height >= 0 else 'top', fontsize=8, rotation=45)
+
+    ax_monthly.set_title("Single Account Strategy - Monthly P&L", fontsize=14, fontweight='bold')
+    ax_monthly.set_ylabel("P&L ($)")
+    ax_monthly.set_xlabel("Date")
+    ax_monthly.grid(True, alpha=0.3, axis='y')
+
+    total_pnl       = monthly_pnl.sum()
+    positive_months = (monthly_pnl > 0).sum()
+    win_rate        = positive_months / len(monthly_pnl) * 100 if len(monthly_pnl) > 0 else 0
+    textstr = f'Total: ${total_pnl:,.0f} | Win Rate: {win_rate:.1f}% ({positive_months}/{len(monthly_pnl)})'
+    ax_monthly.text(0.02, 0.98, textstr, transform=ax_monthly.transAxes,
+                    fontsize=10, verticalalignment='top',
+                    bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.5))
+
     plt.tight_layout()
+
+else:
+    monthly_pnl = daily_pnl_for_plots.resample('M')['PNL_Daily'].sum()
 
 # ============================================================
 # CHART 2: YEARLY P&L (Single Account Strategy)
 # ============================================================
 
-yearly_pnl = daily_pnl_for_plots.resample('Y')['PNL_Daily'].sum()
-
-fig_yearly, ax_yearly = plt.subplots(figsize=(12, 6))
-colors = ['green' if x >= 0 else 'red' for x in yearly_pnl.values]
-bars   = ax_yearly.bar(yearly_pnl.index.year, yearly_pnl.values,
-                       color=colors, alpha=0.7, edgecolor='black', linewidth=0.8, width=0.6)
-ax_yearly.axhline(y=0, color='black', linewidth=0.8, alpha=0.7)
-
-for bar in bars:
-    height    = bar.get_height()
-    label_pos = height + (yearly_pnl.max() * 0.02) if height >= 0 else height - (yearly_pnl.max() * 0.02)
-    ax_yearly.text(bar.get_x() + bar.get_width() / 2., label_pos,
-                   f'${height:,.0f}', ha='center',
-                   va='bottom' if height >= 0 else 'top', fontsize=10, fontweight='bold')
-
-ax_yearly.set_title("Single Account Strategy - Yearly P&L", fontsize=14, fontweight='bold')
-ax_yearly.set_ylabel("P&L ($)")
-ax_yearly.set_xlabel("Year")
-ax_yearly.grid(True, alpha=0.3, axis='y')
-
-total_pnl_yearly = yearly_pnl.sum()
-avg_yearly       = yearly_pnl.mean() if len(yearly_pnl) > 0 else 0
-positive_years   = (yearly_pnl > 0).sum()
-win_rate_yearly  = positive_years / len(yearly_pnl) * 100 if len(yearly_pnl) > 0 else 0
-textstr = f'Total: ${total_pnl_yearly:,.0f} | Avg: ${avg_yearly:,.0f} | Win Rate: {win_rate_yearly:.1f}% ({positive_years}/{len(yearly_pnl)})'
-ax_yearly.text(0.02, 0.98, textstr, transform=ax_yearly.transAxes,
-               fontsize=10, verticalalignment='top',
-               bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.5))
 if SHOW_SINGLE_ACCOUNT_YEARLY_PNL_PLOT:
+    yearly_pnl = daily_pnl_for_plots.resample('Y')['PNL_Daily'].sum()
+
+    fig_yearly, ax_yearly = plt.subplots(figsize=(12, 6))
+    colors = ['green' if x >= 0 else 'red' for x in yearly_pnl.values]
+    bars   = ax_yearly.bar(yearly_pnl.index.year, yearly_pnl.values,
+                           color=colors, alpha=0.7, edgecolor='black', linewidth=0.8, width=0.6)
+    ax_yearly.axhline(y=0, color='black', linewidth=0.8, alpha=0.7)
+
+    for bar in bars:
+        height    = bar.get_height()
+        label_pos = height + (yearly_pnl.max() * 0.02) if height >= 0 else height - (yearly_pnl.max() * 0.02)
+        ax_yearly.text(bar.get_x() + bar.get_width() / 2., label_pos,
+                       f'${height:,.0f}', ha='center',
+                       va='bottom' if height >= 0 else 'top', fontsize=10, fontweight='bold')
+
+    ax_yearly.set_title("Single Account Strategy - Yearly P&L", fontsize=14, fontweight='bold')
+    ax_yearly.set_ylabel("P&L ($)")
+    ax_yearly.set_xlabel("Year")
+    ax_yearly.grid(True, alpha=0.3, axis='y')
+
+    total_pnl_yearly = yearly_pnl.sum()
+    avg_yearly       = yearly_pnl.mean() if len(yearly_pnl) > 0 else 0
+    positive_years   = (yearly_pnl > 0).sum()
+    win_rate_yearly  = positive_years / len(yearly_pnl) * 100 if len(yearly_pnl) > 0 else 0
+    textstr = f'Total: ${total_pnl_yearly:,.0f} | Avg: ${avg_yearly:,.0f} | Win Rate: {win_rate_yearly:.1f}% ({positive_years}/{len(yearly_pnl)})'
+    ax_yearly.text(0.02, 0.98, textstr, transform=ax_yearly.transAxes,
+                   fontsize=10, verticalalignment='top',
+                   bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.5))
+
     plt.tight_layout()
+
+else:
+    yearly_pnl = daily_pnl_for_plots.resample('Y')['PNL_Daily'].sum()
 
 # ============================================================
 # CHART 3: PORTFOLIO MONTHLY P&L
 # ============================================================
 
-if not portfolio_pnl.empty:
+if SHOW_PORTFOLIO_MONTHLY_PNL_PLOT and not portfolio_pnl.empty:
     portfolio_daily_pnl   = portfolio_pnl.diff().fillna(portfolio_pnl.iloc[0])
     portfolio_monthly_pnl = portfolio_daily_pnl.resample('M').sum()
 
@@ -1013,14 +1023,17 @@ if not portfolio_pnl.empty:
     ax_portfolio_monthly.text(0.02, 0.98, textstr, transform=ax_portfolio_monthly.transAxes,
                               fontsize=10, verticalalignment='top',
                               bbox=dict(boxstyle='round', facecolor='lightblue', alpha=0.5))
-    if SHOW_PORTFOLIO_MONTHLY_PNL_PLOT:
-        plt.tight_layout()
+
+    plt.tight_layout()
+else:
+    portfolio_daily_pnl = portfolio_pnl.diff().fillna(portfolio_pnl.iloc[0])
+    portfolio_monthly_pnl = portfolio_daily_pnl.resample('M').sum()
 
 # ============================================================
 # CHART 4: PORTFOLIO YEARLY P&L
 # ============================================================
 
-if not portfolio_pnl.empty:
+if SHOW_PORTFOLIO_YEARLY_PNL_PLOT and not portfolio_pnl.empty:
     portfolio_yearly_pnl = portfolio_daily_pnl.resample('Y').sum()
 
     fig_portfolio_yearly, ax_portfolio_yearly = plt.subplots(figsize=(12, 6))
@@ -1049,8 +1062,7 @@ if not portfolio_pnl.empty:
     ax_portfolio_yearly.text(0.02, 0.98, textstr, transform=ax_portfolio_yearly.transAxes,
                              fontsize=10, verticalalignment='top',
                              bbox=dict(boxstyle='round', facecolor='lightblue', alpha=0.5))
-    if SHOW_PORTFOLIO_YEARLY_PNL_PLOT:
-        plt.tight_layout()
+    plt.tight_layout()
 
 # ======================
 #  STATISTICS
