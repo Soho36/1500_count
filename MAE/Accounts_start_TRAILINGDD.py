@@ -16,8 +16,8 @@ pd.set_option('display.max_categories', 10)
 CSV_PATH = "databento_premarket.csv"  # Path to your CSV file with trade data
 
 # --- Drawdown settings ---
-START_CAPITAL = 2000
-MAX_DRAWDOWN = 2000
+START_CAPITAL = 1000
+MAX_DRAWDOWN = 1000
 equity_dd_freeze_trigger = START_CAPITAL + MAX_DRAWDOWN + 100
 frozen_dd_floor = START_CAPITAL + 100
 
@@ -27,17 +27,16 @@ END_DATE = None
 
 # ==================================================================
 # --- Simulation Mode ---
-# Exactly ONE of these should be True
+# Live trailing: floor trails highest intraday balance
 # ==================================================================
-USE_TRAILING_DD   = True   # Live trailing: floor trails highest intraday balance
-USE_EOD_DRAWDOWN  = False    # EOD threshold: floor is set once at market close each day
+USE_TRAILING_DD = True
 
 # ==================================================================
 # --- New account start triggers ---
 # ==================================================================
 MAX_ACCOUNTS = 20
 USE_TIME_TRIGGER = True
-TIME_TRIGGER_DAYS = 15
+TIME_TRIGGER_DAYS = 30
 USE_PROFIT_TRIGGER = False
 START_IF_PROFIT_THRESHOLD = 1000
 USE_DD_TRIGGER = False
@@ -73,14 +72,7 @@ KEY ASSUMPTIONS FOR PROP STYLE SIMULATION:
 2. Capital treatment: Blown accounts have their equity removed entirely from portfolio.
    This models prop firm capital allocation where blown capital is lost.
 
-3. EOD THRESHOLD LOGIC (per prop firm docs):
-   - At END of each trading day, the closing account balance is recorded
-   - The DD floor for the NEXT session = closing_balance - TRAILING_DD
-   - This floor is FIXED for the entire next session (does NOT trail intraday)
-   - But it IS enforced in real-time: if equity touches the floor intraday → blown
-   - Freeze trigger: once peak closing balance >= DD_FREEZE_TRIGGER, floor freezes at FROZEN_DD_FLOOR
-
-4. LIVE TRAILING LOGIC:
+3. LIVE TRAILING LOGIC:
    - Floor = highest_intraday_balance_ever - TRAILING_DD
    - Updates in real-time on every new high (including MFE during open trades)
    - Freeze trigger: once intraday peak >= DD_FREEZE_TRIGGER, floor freezes permanently
@@ -252,23 +244,13 @@ def create_trade_events_with_priority(df):
 
 def simulate_accounts_with_prop_dd_optimized(events_df, start_capital, max_accounts):
     """
-    Simulates multiple accounts using either:
+    Simulates multiple accounts using live trailing DD:
 
-    TRAILING DD MODE (USE_TRAILING_DD=True):
+    TRAILING DD MODE:
       - DD floor = peak_intraday_equity - TRAILING_DD
       - Peak updates in real-time on MFE and profitable exits
       - Once peak >= DD_FREEZE_TRIGGER, floor freezes permanently at FROZEN_DD_FLOOR
-
-    EOD THRESHOLD MODE (USE_EOD_DRAWDOWN=True):
-      - DD floor is set ONCE per day at market close: close_equity - TRAILING_DD
-      - This floor is FIXED for the entire next session
-      - Still enforced intraday in real-time (MAE can trigger blowout)
-      - Once peak closing equity >= DD_FREEZE_TRIGGER, floor freezes permanently at FROZEN_DD_FLOOR
-      - Note: freeze is evaluated at close, so it applies from the NEXT session onward
     """
-    if USE_TRAILING_DD and USE_EOD_DRAWDOWN:
-        raise ValueError("Only one DD mode can be enabled: set either USE_TRAILING_DD or USE_EOD_DRAWDOWN to True.")
-
     accounts = []
 
     event_times   = events_df['time'].values
@@ -294,15 +276,8 @@ def simulate_accounts_with_prop_dd_optimized(events_df, start_capital, max_accou
             'start_date': start_date,
             'equity': start_capital,
             'pnl': 0,
-            # --- Trailing DD state ---
-            'peak': start_capital,               # highest equity ever seen (trailing mode)
+            'peak': start_capital,
             'freeze_triggered': False,
-            # --- EOD DD state ---
-            'eod_dd_floor': start_capital - MAX_DRAWDOWN,  # floor for current session (EOD mode)
-            'eod_closing_equity': start_capital,          # closing equity of last session
-            'eod_peak_closing': start_capital,            # highest closing equity ever (for freeze)
-            'last_eod_date': None,               # date of last EOD update
-            # --- Shared state ---
             'alive': True,
             'current_trade_start_equity': None,
             'last_event_idx': -1,
@@ -312,7 +287,6 @@ def simulate_accounts_with_prop_dd_optimized(events_df, start_capital, max_accou
 
     for event_idx in range(total_events):
         current_time = pd.Timestamp(event_times[event_idx])
-        current_day  = current_time.date()
         event_type   = event_types[event_idx]
 
         active_accounts = [
@@ -332,64 +306,44 @@ def simulate_accounts_with_prop_dd_optimized(events_df, start_capital, max_accou
                 acc['current_trade_start_equity'] = acc['equity']
 
             # ----------------------------------------------------------------
-            # MAE — check blowout using current session's floor
+            # MAE — check blowout
             # ----------------------------------------------------------------
             elif event_type == 'mae':
                 if acc['current_trade_start_equity'] is None or not acc['alive']:
                     continue
 
                 temp_equity = acc['current_trade_start_equity'] + event_mae[event_idx]
-
-                if USE_TRAILING_DD:
-                    # Floor trails the intraday peak
-                    floor = (
-                        frozen_dd_floor
-                        if acc['freeze_triggered']
-                        else acc['peak'] - MAX_DRAWDOWN
-                    )
-                    if temp_equity <= floor:
-                        acc['alive'] = False
-                        acc['equity'] = temp_equity
-                        acc['pnl'] = temp_equity - start_capital
-                        print(f"Account {acc['id']} BLOWN intraday (Trailing DD) on {current_time} | "
-                              f"temp_equity={temp_equity:.2f} floor={floor:.2f}")
-                        account_history_points.append({
-                            'time': current_time, 'account_id': acc['id'],
-                            'equity': temp_equity, 'pnl': acc['pnl'], 'event': 'blowout_mae'
-                        })
-
-                elif USE_EOD_DRAWDOWN:
-                    # Floor is fixed for this session (set at yesterday's close)
-                    floor = acc['eod_dd_floor']
-                    if temp_equity <= floor:
-                        acc['alive'] = False
-                        acc['equity'] = temp_equity
-                        acc['pnl'] = temp_equity - start_capital
-                        print(f"Account {acc['id']} BLOWN intraday (EOD floor) on {current_time} | "
-                              f"temp_equity={temp_equity:.2f} floor={floor:.2f}")
-                        account_history_points.append({
-                            'time': current_time, 'account_id': acc['id'],
-                            'equity': temp_equity, 'pnl': acc['pnl'], 'event': 'blowout_mae'
-                        })
+                floor = (
+                    frozen_dd_floor
+                    if acc['freeze_triggered']
+                    else acc['peak'] - MAX_DRAWDOWN
+                )
+                if temp_equity <= floor:
+                    acc['alive'] = False
+                    acc['equity'] = temp_equity
+                    acc['pnl'] = temp_equity - start_capital
+                    print(f"Account {acc['id']} BLOWN intraday (Trailing DD) on {current_time} | "
+                          f"temp_equity={temp_equity:.2f} floor={floor:.2f}")
+                    account_history_points.append({
+                        'time': current_time, 'account_id': acc['id'],
+                        'equity': temp_equity, 'pnl': acc['pnl'], 'event': 'blowout_mae'
+                    })
 
             # ----------------------------------------------------------------
-            # MFE — update trailing peak (trailing mode only; EOD ignores intraday highs)
+            # MFE — update trailing peak
             # ----------------------------------------------------------------
             elif event_type == 'mfe':
                 if acc['current_trade_start_equity'] is None or not acc['alive']:
                     continue
 
-                if USE_TRAILING_DD:
-                    temp_equity = acc['current_trade_start_equity'] + event_mfe[event_idx]
-                    if temp_equity > acc['peak']:
-                        acc['peak'] = temp_equity
-                        if acc['peak'] >= equity_dd_freeze_trigger:
-                            acc['freeze_triggered'] = True
-
-                # EOD mode: MFE does NOT update the floor — it's purely a closing-balance system
+                temp_equity = acc['current_trade_start_equity'] + event_mfe[event_idx]
+                if temp_equity > acc['peak']:
+                    acc['peak'] = temp_equity
+                    if acc['peak'] >= equity_dd_freeze_trigger:
+                        acc['freeze_triggered'] = True
 
             # ----------------------------------------------------------------
-            # EXIT — update equity, check blowout, do EOD update if new day
+            # EXIT — update equity and check blowout
             # ----------------------------------------------------------------
             elif event_type == 'exit':
                 if acc['current_trade_start_equity'] is None or not acc['alive']:
@@ -400,83 +354,30 @@ def simulate_accounts_with_prop_dd_optimized(events_df, start_capital, max_accou
                 acc['pnl']    = new_equity - start_capital
                 acc['current_trade_start_equity'] = None
 
-                # --- Trailing DD: update peak on profitable exits ---
-                if USE_TRAILING_DD:
-                    if acc['equity'] > acc['peak']:
-                        acc['peak'] = acc['equity']
-                        if acc['peak'] >= equity_dd_freeze_trigger:
-                            acc['freeze_triggered'] = True
+                if acc['equity'] > acc['peak']:
+                    acc['peak'] = acc['equity']
+                    if acc['peak'] >= equity_dd_freeze_trigger:
+                        acc['freeze_triggered'] = True
 
-                    floor = (
-                        frozen_dd_floor
-                        if acc['freeze_triggered']
-                        else acc['peak'] - MAX_DRAWDOWN
-                    )
-                    if acc['equity'] <= floor:
-                        acc['alive'] = False
-                        print(f"Account {acc['id']} BLOWN at exit (Trailing DD) on {current_time} | "
-                              f"equity={acc['equity']:.2f} floor={floor:.2f}")
-                        account_history_points.append({
-                            'time': current_time, 'account_id': acc['id'],
-                            'equity': acc['equity'], 'pnl': acc['pnl'], 'event': 'blowout_exit'
-                        })
-                        continue
-
-                # --- EOD DD: check against today's fixed floor at exit ---
-                elif USE_EOD_DRAWDOWN:
-                    floor = acc['eod_dd_floor']
-                    if acc['equity'] <= floor:
-                        acc['alive'] = False
-                        print(f"Account {acc['id']} BLOWN at exit (EOD floor) on {current_time} | "
-                              f"equity={acc['equity']:.2f} floor={floor:.2f}")
-                        account_history_points.append({
-                            'time': current_time, 'account_id': acc['id'],
-                            'equity': acc['equity'], 'pnl': acc['pnl'], 'event': 'blowout_exit'
-                        })
-                        continue
-
-                # --- EOD update: recalculate floor at the END of each trading day ---
-                # We treat the LAST exit of a given calendar day as the "closing balance".
-                # Because we process events in time order, the last exit on a given date
-                # will be the most recent one seen — we update when the day changes.
-                if USE_EOD_DRAWDOWN and acc['alive']:
-                    # Check if this is the first exit of a new day (day has changed since last EOD update)
-                    # We defer the actual floor update until we detect we've moved to the NEXT day.
-                    # Implementation: store today's closing equity, then apply it when a new day begins.
-                    acc['eod_closing_equity'] = acc['equity']  # always keep latest close for this day
-                    acc['last_eod_date'] = current_day         # mark that we have data for this day
+                floor = (
+                    frozen_dd_floor
+                    if acc['freeze_triggered']
+                    else acc['peak'] - MAX_DRAWDOWN
+                )
+                if acc['equity'] <= floor:
+                    acc['alive'] = False
+                    print(f"Account {acc['id']} BLOWN at exit (Trailing DD) on {current_time} | "
+                          f"equity={acc['equity']:.2f} floor={floor:.2f}")
+                    account_history_points.append({
+                        'time': current_time, 'account_id': acc['id'],
+                        'equity': acc['equity'], 'pnl': acc['pnl'], 'event': 'blowout_exit'
+                    })
+                    continue
 
                 account_history_points.append({
                     'time': current_time, 'account_id': acc['id'],
                     'equity': acc['equity'], 'pnl': acc['pnl'], 'event': 'exit'
                 })
-
-        # ----------------------------------------------------------------
-        # EOD FLOOR UPDATE: detect day boundary and apply new floor
-        # ----------------------------------------------------------------
-        # When we see the first event of a new day, finalize the previous day's floor.
-        if USE_EOD_DRAWDOWN and event_type == 'entry':
-            for acc in accounts:
-                if not acc['alive']:
-                    continue
-                if acc['last_eod_date'] is not None and acc['last_eod_date'] < current_day:
-                    # A new session has started — apply the floor from yesterday's close
-                    if not acc['freeze_triggered']:
-                        closing_eq = acc['eod_closing_equity']
-                        # Update peak closing equity
-                        acc['eod_peak_closing'] = max(acc['eod_peak_closing'], closing_eq)
-                        # Check freeze trigger based on peak closing equity
-                        if acc['eod_peak_closing'] >= equity_dd_freeze_trigger:
-                            acc['freeze_triggered'] = True
-                            acc['eod_dd_floor'] = frozen_dd_floor
-                            print(f"Account {acc['id']} FREEZE triggered at session open on {current_day} | "
-                                  f"peak_closing={acc['eod_peak_closing']:.2f}")
-                        else:
-                            # Set the fixed floor for today's session
-                            acc['eod_dd_floor'] = closing_eq - MAX_DRAWDOWN
-                    # If freeze already triggered, floor stays at FROZEN_DD_FLOOR (set during freeze event)
-                    # Update the EOD date so we don't re-trigger until tomorrow
-                    acc['last_eod_date'] = current_day
 
         # ----------------------------------------------------------------
         # Portfolio snapshot
@@ -494,7 +395,7 @@ def simulate_accounts_with_prop_dd_optimized(events_df, start_capital, max_accou
         if len(accounts) < max_accounts:
             alive_accounts = [acc for acc in accounts if acc['alive']]
             if alive_accounts:
-                current_dd = min(acc['equity'] - acc['peak'] for acc in alive_accounts) if USE_TRAILING_DD else 0
+                current_dd = min(acc['equity'] - acc['peak'] for acc in alive_accounts)
             else:
                 current_dd = 0
 
@@ -625,10 +526,9 @@ def simulate_accounts_closed_dd(pl_series, start_capital, max_accounts):
 
 
 def print_config():
-    mode = "Trailing DD" if USE_TRAILING_DD else ("EOD Threshold" if USE_EOD_DRAWDOWN else "Closed Equity")
     print("=== Configuration ===")
     print(f"CSV_PATH:          {CSV_PATH}")
-    print(f"Mode:              {mode}")
+    print(f"Mode:              Trailing DD")
     print(f"START_CAPITAL:     {START_CAPITAL}")
     print(f"TRAILING_DD:       {MAX_DRAWDOWN}")
     print(f"DD_FREEZE_TRIGGER: {equity_dd_freeze_trigger}")
@@ -648,61 +548,23 @@ print_config()
 df = load_and_preprocess_data(CSV_PATH, START_DATE, END_DATE)
 print(f"\nLoaded {len(df)} trades from {df['Entry_time'].min()} to {df['Exit_time'].max()}")
 
-# For the unified DD plots, use the prop-style drawdown data
-if USE_TRAILING_DD or USE_EOD_DRAWDOWN:
-    print("\nComputing prop-style drawdown for visualization...")
-    daily_data, full_dd_curve = compute_prop_style_drawdown(df)
-    plot_df = daily_data.copy()
+mode = "Prop Firm — Live Trailing DD"
 
-    daily_pnl_for_plots = daily_data[["Date", "Equity"]].copy()
-    daily_pnl_for_plots.rename(columns={"Equity": "PNL_Daily"}, inplace=True)
-    daily_pnl_for_plots["PNL_Daily"] = daily_pnl_for_plots["PNL_Daily"].diff()
-    if len(daily_pnl_for_plots) > 0:
-        daily_pnl_for_plots.iloc[0, daily_pnl_for_plots.columns.get_loc('PNL_Daily')] = \
-            daily_data["Equity"].iloc[0]
-    daily_pnl_for_plots.set_index('Date', inplace=True)
+print("\nComputing prop-style drawdown for visualization...")
+daily_data, full_dd_curve = compute_prop_style_drawdown(df)
+plot_df = daily_data.copy()
 
-else:
-    df['Date'] = df['Exit_time'].dt.date
-    daily_pnl = df.groupby('Date')['PNL'].sum()
-    daily_pnl.index = pd.to_datetime(daily_pnl.index)
-    daily_pnl = daily_pnl.sort_index()
-
-    if len(daily_pnl) > 0:
-        date_range = pd.date_range(start=daily_pnl.index.min(), end=daily_pnl.index.max(), freq='D')
-        daily_pnl  = daily_pnl.reindex(date_range, fill_value=0)
-
-    equity_original = START_CAPITAL + daily_pnl.cumsum()
-    dd_series       = equity_original - equity_original.cummax()
-
-    plot_df = pd.DataFrame({
-        "Date":        dd_series.index,
-        "Equity":      equity_original.values,
-        "Equity_Peak": equity_original.cummax().values,
-        "Equity_Low":  equity_original.values,
-        "DD_Closed":   dd_series.values,
-        "DD_Floating": dd_series.values
-    })
-
-    daily_pnl_for_plots = daily_pnl.to_frame(name='PNL_Daily')
+daily_pnl_for_plots = daily_data[["Date", "Equity"]].copy()
+daily_pnl_for_plots.rename(columns={"Equity": "PNL_Daily"}, inplace=True)
+daily_pnl_for_plots["PNL_Daily"] = daily_pnl_for_plots["PNL_Daily"].diff()
+if len(daily_pnl_for_plots) > 0:
+    daily_pnl_for_plots.iloc[0, daily_pnl_for_plots.columns.get_loc('PNL_Daily')] = \
+        daily_data["Equity"].iloc[0]
+daily_pnl_for_plots.set_index('Date', inplace=True)
 
 print("\n" + "=" * 60)
-if USE_TRAILING_DD:
-    mode = "Prop Firm — Live Trailing DD"
-elif USE_EOD_DRAWDOWN:
-    mode = "Prop Firm — EOD Threshold"
-else:
-    mode = "Closed Equity"
 print("SIMULATION MODE:", mode)
 print("=" * 60)
-
-if USE_EOD_DRAWDOWN:
-    print("\nEOD THRESHOLD RULES:")
-    print("1. DD floor is calculated ONCE per day at market close: close_equity - TRAILING_DD")
-    print("2. Floor is FIXED for the entire next session (does not trail intraday)")
-    print("3. Floor is still enforced in real-time: MAE touching floor = blown intraday")
-    print(f"4. Freeze trigger: once peak closing equity >= {equity_dd_freeze_trigger}, floor frozen at {frozen_dd_floor}")
-    print("=" * 60)
 
 events_df = create_trade_events_with_priority(df)
 print(f"Created {len(events_df)} events from {len(df)} trades")
@@ -777,9 +639,8 @@ for col in portfolio_profitable_accounts.columns:
 
 portfolio_profitable_accounts = portfolio_profitable_accounts.sum(axis=1)
 
-if PORTFOLIO_TOTAL_PNL_PLOT and not portfolio_pnl.empty:    # Only plot if we have portfolio data
+if PORTFOLIO_TOTAL_PNL_PLOT and not portfolio_pnl.empty:
     fig_portfolio, ax_portfolio = plt.subplots(figsize=(14, 6))
-    # Strategy PnL (all accounts)
     ax_portfolio.plot(
         portfolio_all_accounts.index,
         portfolio_all_accounts.values,
@@ -787,7 +648,6 @@ if PORTFOLIO_TOTAL_PNL_PLOT and not portfolio_pnl.empty:    # Only plot if we ha
         color='orange',
         label="Strategy P&L - all accounts(alive, blown, and in a loss)"
     )
-    # Alive accounts
     ax_portfolio.plot(
         portfolio_alive_accounts.index,
         portfolio_alive_accounts.values,
@@ -795,7 +655,6 @@ if PORTFOLIO_TOTAL_PNL_PLOT and not portfolio_pnl.empty:    # Only plot if we ha
         color='blue',
         label="Portfolio P&L - alive accounts(in profit and in a loss)"
     )
-    # Withdrawable profits
     ax_portfolio.plot(
         portfolio_profitable_accounts.index,
         portfolio_profitable_accounts.values,
@@ -849,7 +708,7 @@ if STARTED_ACCOUNTS_PNL_PLOT and not acc_pnl_df.empty:
     ax_accounts.xaxis.set_major_formatter(mdates.DateFormatter('%d-%m-%Y'))
     ax_accounts.xaxis.set_major_locator(mdates.MonthLocator(interval=1))
     plt.setp(ax_accounts.xaxis.get_majorticklabels(), rotation=45)
-    ax_accounts.legend()
+    # ax_accounts.legend()
     plt.tight_layout()
 
 # ======================
@@ -1087,7 +946,7 @@ print("-" * 60)
 for acc in accounts:
     status = "ALIVE" if acc['alive'] else "BLOWN \u2B24"
     peak_pnl = acc['peak'] - START_CAPITAL
-    print(f"Account {acc['id']:>2} | Status: {status:<8} | Final P&L: ${acc['pnl']:>8.2f} | Highest P&L: ${peak_pnl:>8.2f}")
+    print(f"Account {acc['id']:>2} | Status: {status:<8} | Final P&L: ${acc['pnl']:>8.2f} | Highest P&L(MFE): ${peak_pnl:>8.2f}")
 print("-" * 60)
 
 number_accounts_started = len(accounts)
@@ -1128,7 +987,6 @@ print("-" * 60)
 print(f"{'Total Capital Deployed:':<35} ${total_capital_deployed:,.2f}")
 try:
     print(f"{'Return on Capital (alive PnL):':<35} {(portfolio_profitable_pnl / total_capital_deployed * 100):.1f}%")
-
 except ZeroDivisionError:
     print(f"{'Return on Capital (alive PnL):':<35} N/A (no capital deployed or blown)")
 
