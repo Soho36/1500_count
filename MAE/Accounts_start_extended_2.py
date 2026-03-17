@@ -13,16 +13,16 @@ pd.set_option('display.min_rows', 1000)
 pd.set_option('display.max_rows', 2000)
 pd.set_option('display.max_categories', 10)
 
-CSV_PATH = "databento_all.csv"  # Path to your CSV file with trade data
+CSV_PATH = "databento_premarket.csv"  # Path to your CSV file with trade data
 
 # --- Drawdown settings ---
-START_CAPITAL = 3000
-MAX_DRAWDOWN = 3000
+START_CAPITAL = 2000
+MAX_DRAWDOWN = 2000
 equity_dd_freeze_trigger = START_CAPITAL + MAX_DRAWDOWN + 100
 frozen_dd_floor = START_CAPITAL + 100
 
 # --- Date range filter ---
-START_DATE = "2025-02-01"
+START_DATE = "2025-01-10"
 END_DATE = None
 
 # ==================================================================
@@ -35,7 +35,7 @@ USE_EOD_DRAWDOWN  = False    # EOD threshold: floor is set once at market close 
 # ==================================================================
 # --- New account start triggers ---
 # ==================================================================
-MAX_ACCOUNTS = 10
+MAX_ACCOUNTS = 20
 USE_TIME_TRIGGER = True
 TIME_TRIGGER_DAYS = 15
 USE_PROFIT_TRIGGER = False
@@ -349,6 +349,8 @@ def simulate_accounts_with_prop_dd_optimized(events_df, start_capital, max_accou
                     )
                     if temp_equity <= floor:
                         acc['alive'] = False
+                        acc['equity'] = temp_equity
+                        acc['pnl'] = temp_equity - start_capital
                         print(f"Account {acc['id']} BLOWN intraday (Trailing DD) on {current_time} | "
                               f"temp_equity={temp_equity:.2f} floor={floor:.2f}")
                         account_history_points.append({
@@ -361,6 +363,8 @@ def simulate_accounts_with_prop_dd_optimized(events_df, start_capital, max_accou
                     floor = acc['eod_dd_floor']
                     if temp_equity <= floor:
                         acc['alive'] = False
+                        acc['equity'] = temp_equity
+                        acc['pnl'] = temp_equity - start_capital
                         print(f"Account {acc['id']} BLOWN intraday (EOD floor) on {current_time} | "
                               f"temp_equity={temp_equity:.2f} floor={floor:.2f}")
                         account_history_points.append({
@@ -720,7 +724,7 @@ if UNIFIED_EQUITY_AND_DD_PLOTS_3:
     axes[0].plot(plot_df["Date"], plot_df["Equity_Peak"], linewidth=1, label="Equity_Peak")
     axes[0].plot(plot_df["Date"], plot_df["Equity_Low"],  linewidth=1, label="Equity_Low")
     axes[0].yaxis.set_major_formatter(mticker.StrMethodFormatter('{x:,.0f}'))
-    axes[0].xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m-%d'))
+    axes[0].xaxis.set_major_formatter(mdates.DateFormatter('%d-%m-%Y'))
     axes[0].set_title("Equity Curve (Single Account Strategy)")
     axes[0].set_ylabel("Equity ($)")
     axes[0].grid(True)
@@ -729,7 +733,7 @@ if UNIFIED_EQUITY_AND_DD_PLOTS_3:
     axes[1].plot(plot_df["Date"], plot_df["DD_Closed"], linewidth=2, label="Closed DD")
     axes[1].axhline(0, linewidth=0.8)
     axes[1].yaxis.set_major_formatter(mticker.StrMethodFormatter('{x:,.0f}'))
-    axes[1].xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m-%d'))
+    axes[1].xaxis.set_major_formatter(mdates.DateFormatter('%d-%m-%Y'))
     axes[1].set_title("Closed Equity Drawdown")
     axes[1].set_ylabel("Drawdown ($)")
     axes[1].grid(True)
@@ -738,7 +742,7 @@ if UNIFIED_EQUITY_AND_DD_PLOTS_3:
     axes[2].plot(plot_df["Date"], plot_df["DD_Floating"], linewidth=2, label="Floating DD")
     axes[2].axhline(0, linewidth=0.8)
     axes[2].yaxis.set_major_formatter(mticker.StrMethodFormatter('{x:,.0f}'))
-    axes[2].xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m-%d'))
+    axes[2].xaxis.set_major_formatter(mdates.DateFormatter('%d-%m-%Y'))
     axes[2].set_title("Floating Drawdown (Includes Intraday MAE/MFE)")
     axes[2].set_xlabel("Date")
     axes[2].set_ylabel("Drawdown ($)")
@@ -807,7 +811,7 @@ if PORTFOLIO_TOTAL_PNL_PLOT and not portfolio_pnl.empty:    # Only plot if we ha
     ax_portfolio.set_xlabel("Date")
     ax_portfolio.grid(True, alpha=0.3)
     ax_portfolio.legend()
-    ax_portfolio.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m-%d'))
+    ax_portfolio.xaxis.set_major_formatter(mdates.DateFormatter('%d-%m-%Y'))
     ax_portfolio.xaxis.set_major_locator(mdates.MonthLocator(interval=1))
     ax_portfolio.yaxis.set_major_formatter(mticker.StrMethodFormatter('{x:,.0f}'))
     plt.setp(ax_portfolio.xaxis.get_majorticklabels(), rotation=45)
@@ -842,7 +846,7 @@ if STARTED_ACCOUNTS_PNL_PLOT and not acc_pnl_df.empty:
         color='red', linewidth=2, linestyle='--', alpha=0.8,
         label=f'Frozen DD floor (equity={frozen_dd_floor})'
     )
-    ax_accounts.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m-%d'))
+    ax_accounts.xaxis.set_major_formatter(mdates.DateFormatter('%d-%m-%Y'))
     ax_accounts.xaxis.set_major_locator(mdates.MonthLocator(interval=1))
     plt.setp(ax_accounts.xaxis.get_majorticklabels(), rotation=45)
     ax_accounts.legend()
@@ -891,7 +895,7 @@ if SHOW_SINGLE_ACCOUNT_DAILY_PNL_PLOT:
     ax_daily.axhline(y=0, color='black', linewidth=0.8, alpha=0.7)
 
     ax_daily.xaxis.set_major_locator(ticker.MaxNLocator(20))
-    ax_daily.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m-%d'))
+    ax_daily.xaxis.set_major_formatter(mdates.DateFormatter('%d-%m-%Y'))
     plt.setp(ax_daily.xaxis.get_majorticklabels(), rotation=60)
 
     ax_daily.yaxis.set_major_formatter(mticker.StrMethodFormatter('${x:,.0f}'))
@@ -1082,8 +1086,8 @@ print("\nFINAL P&L PER ACCOUNT:")
 print("-" * 60)
 for acc in accounts:
     status = "ALIVE" if acc['alive'] else "BLOWN \u2B24"
-    print(f"Account {acc['id']:>2} | Status: {status:<8} | Final P&L: ${acc['pnl']:>8.2f}")
-
+    peak_pnl = acc['peak'] - START_CAPITAL
+    print(f"Account {acc['id']:>2} | Status: {status:<8} | Final P&L: ${acc['pnl']:>8.2f} | Highest P&L: ${peak_pnl:>8.2f}")
 print("-" * 60)
 
 number_accounts_started = len(accounts)
