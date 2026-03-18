@@ -13,16 +13,17 @@ pd.set_option('display.min_rows', 1000)
 pd.set_option('display.max_rows', 2000)
 pd.set_option('display.max_categories', 10)
 
-CSV_PATH = "databento_premarket.csv"  # Path to your CSV file with trade data
+CSV_PATH = "databento_all.csv"  # Path to your CSV file with trade data
 
 # --- Drawdown settings ---
-START_CAPITAL = 1000
-MAX_DRAWDOWN = 1000
+
+MAX_DRAWDOWN = 2500
+START_CAPITAL = MAX_DRAWDOWN  # For prop firm style, we set max drawdown equal to starting capital (100% loss = blowout)
 equity_dd_freeze_trigger = START_CAPITAL + MAX_DRAWDOWN + 100
 frozen_dd_floor = START_CAPITAL + 100
 
 # --- Date range filter ---
-START_DATE = "2025-01-10"
+START_DATE = "2020-01-01"
 END_DATE = None
 
 # ==================================================================
@@ -34,7 +35,7 @@ USE_TRAILING_DD = True
 # ==================================================================
 # --- New account start triggers ---
 # ==================================================================
-MAX_ACCOUNTS = 20
+MAX_ACCOUNTS = 80
 USE_TIME_TRIGGER = True
 TIME_TRIGGER_DAYS = 30
 USE_PROFIT_TRIGGER = False
@@ -708,7 +709,7 @@ if STARTED_ACCOUNTS_PNL_PLOT and not acc_pnl_df.empty:
     ax_accounts.xaxis.set_major_formatter(mdates.DateFormatter('%d-%m-%Y'))
     ax_accounts.xaxis.set_major_locator(mdates.MonthLocator(interval=1))
     plt.setp(ax_accounts.xaxis.get_majorticklabels(), rotation=45)
-    # ax_accounts.legend()
+    ax_accounts.legend()
     plt.tight_layout()
 
 # ======================
