@@ -3,7 +3,6 @@ import matplotlib.pyplot as plt
 import numpy as np
 import matplotlib.dates as mdates
 import matplotlib.ticker as mticker
-import matplotlib.ticker as ticker
 from datetime import timedelta
 
 # ========================================================================================
@@ -256,15 +255,17 @@ def simulate_accounts_with_prop_dd_optimized(events_df, start_capital, max_accou
             'equity':       start_capital,
             'pnl':          0,
             'freeze_triggered': False,
-            'passed':       False,
-            'pass_date':    None,
-            'pass_pnl':     None,
-            'blow_date':    None,
+            'passed':       False,          # True when profit target hit
+            'pass_date':    None,           # timestamp when target was reached
+            'pass_pnl':     None,           # exact P&L at the moment of passing
+            'blow_date':    None,           # timestamp when account was blown
+            # --- EOD DD state ---
             'eod_dd_floor':       start_capital - MAX_DRAWDOWN,
             'eod_peak_closing':   start_capital,
             'eod_closing_equity': start_capital,
             'last_eod_date':      None,
             'peak_closed_pnl':    0.0,
+            # --- Shared state ---
             'alive':                    True,
             'current_trade_start_equity': None,
             'last_event_idx':           -1,
@@ -277,6 +278,9 @@ def simulate_accounts_with_prop_dd_optimized(events_df, start_capital, max_accou
         current_day  = current_time.date()
         event_type   = event_types[event_idx]
 
+        # ----------------------------------------------------------------
+        # EOD FLOOR UPDATE
+        # ----------------------------------------------------------------
         if event_type == 'entry':
             for acc in accounts:
                 if not acc['alive']:
@@ -309,9 +313,15 @@ def simulate_accounts_with_prop_dd_optimized(events_df, start_capital, max_accou
                 continue
             acc['last_event_idx'] = event_idx
 
+            # ----------------------------------------------------------------
+            # ENTRY
+            # ----------------------------------------------------------------
             if event_type == 'entry':
                 acc['current_trade_start_equity'] = acc['equity']
 
+            # ----------------------------------------------------------------
+            # MAE
+            # ----------------------------------------------------------------
             elif event_type == 'mae':
                 if acc['current_trade_start_equity'] is None or not acc['alive']:
                     continue
@@ -330,9 +340,15 @@ def simulate_accounts_with_prop_dd_optimized(events_df, start_capital, max_accou
                         'equity': temp_equity, 'pnl': acc['pnl'], 'event': 'blowout_mae'
                     })
 
+            # ----------------------------------------------------------------
+            # MFE
+            # ----------------------------------------------------------------
             elif event_type == 'mfe':
                 pass
 
+            # ----------------------------------------------------------------
+            # EXIT — settle trade, check floor, check profit target
+            # ----------------------------------------------------------------
             elif event_type == 'exit':
                 if acc['current_trade_start_equity'] is None or not acc['alive']:
                     continue
@@ -342,6 +358,7 @@ def simulate_accounts_with_prop_dd_optimized(events_df, start_capital, max_accou
                 acc['pnl']    = new_equity - start_capital
                 acc['current_trade_start_equity'] = None
 
+                # --- Blowout check ---
                 floor = acc['eod_dd_floor']
                 if acc['equity'] <= floor:
                     acc['alive']     = False
@@ -354,8 +371,9 @@ def simulate_accounts_with_prop_dd_optimized(events_df, start_capital, max_accou
                     })
                     continue
 
+                # --- Profit target check ---
                 if acc['pnl'] >= PROFIT_TARGET:
-                    acc['alive']     = False
+                    acc['alive']     = False   # stop trading — eval passed
                     acc['passed']    = True
                     acc['pass_date'] = current_time
                     acc['pass_pnl']  = acc['pnl']
@@ -367,6 +385,7 @@ def simulate_accounts_with_prop_dd_optimized(events_df, start_capital, max_accou
                     })
                     continue
 
+                # --- Normal exit recording ---
                 acc['eod_closing_equity'] = acc['equity']
                 acc['last_eod_date']      = current_day
                 acc['peak_closed_pnl']    = max(acc['peak_closed_pnl'], acc['pnl'])
@@ -376,6 +395,9 @@ def simulate_accounts_with_prop_dd_optimized(events_df, start_capital, max_accou
                     'equity': acc['equity'], 'pnl': acc['pnl'], 'event': 'exit'
                 })
 
+        # ----------------------------------------------------------------
+        # Portfolio snapshot
+        # ----------------------------------------------------------------
         if event_type in ['exit', 'mae']:
             total_pnl  = sum(acc['pnl'] for acc in accounts if acc['alive'])
             alive_count = sum(1 for acc in accounts if acc['alive'])
@@ -383,6 +405,9 @@ def simulate_accounts_with_prop_dd_optimized(events_df, start_capital, max_accou
             num_alive_history.append(alive_count)
             portfolio_times.append(current_time)
 
+        # ----------------------------------------------------------------
+        # Start new accounts
+        # ----------------------------------------------------------------
         if len(accounts) < max_accounts:
             alive_accounts = [acc for acc in accounts if acc['alive']]
             current_dd = 0
@@ -453,6 +478,64 @@ def simulate_accounts_with_prop_dd_optimized(events_df, start_capital, max_accou
         account_pnl = pd.DataFrame()
 
     return portfolio_pnl_daily, account_pnl, num_alive_daily, accounts
+
+
+def simulate_accounts_closed_dd(pl_series, start_capital, max_accounts):
+    """Original closed-equity simulation (simplified, for reference)."""
+    dates    = pl_series.index
+    accounts = []
+
+    accounts.append({
+        'id': 1, 'start_idx': 0, 'start_date': dates[0],
+        'equity': start_capital, 'pnl': 0,
+        'rolling_max': start_capital, 'alive': True
+    })
+
+    last_start_date = dates[0]
+    portfolio_pnl   = []
+    num_alive       = []
+    account_pnls    = []
+
+    for i_date, date in enumerate(dates):
+        for acc in accounts:
+            if acc['alive'] and i_date >= acc['start_idx']:
+                acc['equity']      += pl_series.iloc[i_date]
+                acc['pnl']          = acc['equity'] - start_capital
+                acc['rolling_max']  = max(acc['rolling_max'], acc['equity'])
+
+                floor = (
+                    frozen_dd_floor
+                    if acc['rolling_max'] >= equity_dd_freeze_trigger
+                    else acc['rolling_max'] - MAX_DRAWDOWN
+                )
+                if acc['equity'] <= floor:
+                    acc['alive'] = False
+
+        total_pnl = sum(acc['pnl'] for acc in accounts if acc['alive'])
+        portfolio_pnl.append(total_pnl)
+        num_alive.append(sum(1 for acc in accounts if acc['alive']))
+
+        row = {
+            f'acc_{acc["id"]}_pnl': acc['pnl'] if acc['start_idx'] <= i_date else np.nan
+            for acc in accounts
+        }
+        row['time'] = date
+        account_pnls.append(row)
+
+        if len(accounts) < max_accounts and USE_TIME_TRIGGER:
+            if (date - last_start_date).days >= TIME_TRIGGER_DAYS:
+                accounts.append({
+                    'id': len(accounts) + 1, 'start_idx': i_date, 'start_date': date,
+                    'equity': start_capital, 'pnl': 0,
+                    'rolling_max': start_capital, 'alive': True
+                })
+                last_start_date = date
+
+    portfolio_pnl_series = pd.Series(portfolio_pnl, index=dates, name='portfolio_pnl')
+    accounts_df          = pd.DataFrame(account_pnls).set_index('time')
+    num_alive_series     = pd.Series(num_alive, index=dates, name='num_alive')
+
+    return portfolio_pnl_series, accounts_df, num_alive_series, accounts
 
 
 def print_config():
@@ -560,6 +643,7 @@ if UNIFIED_EQUITY_AND_DD_PLOTS_3:
 # PORTFOLIO TOTAL PNL PLOT
 # ======================
 
+# --- Additional portfolio curves ---
 portfolio_all_accounts = acc_pnl_df.sum(axis=1)
 
 portfolio_alive_accounts = acc_pnl_df.copy()
@@ -664,7 +748,7 @@ if MONTHLY_OUTCOMES_BAR_PLOT:
     for acc in accounts:
         if acc.get('passed', False):
             days = (acc['pass_date'] - acc['start_date']).days
-            outcome = 'PASSEDBLOWN' if days > TIME_TRIGGER_DAYS else 'PASSED'
+            outcome = 'PASSEDBLOWN' if days > 30 else 'PASSED'
             end_date = acc['pass_date']
         elif acc['blow_date'] is not None:
             outcome = 'BLOWN'
@@ -704,7 +788,7 @@ if MONTHLY_OUTCOMES_BAR_PLOT:
         bars_pb = ax_mo.bar(
             x, monthly_outcomes['PASSEDBLOWN'],
             width=bar_width, color='#f39c12', edgecolor='white', linewidth=0.6,
-            label=f'PASSEDBLOWN ✗ (>{TIME_TRIGGER_DAYS}d)'
+            label=f'PASSEDBLOWN ✗ (>{30}d)'
         )
         bars_blown = ax_mo.bar(
             x + bar_width, monthly_outcomes['BLOWN'],
@@ -736,8 +820,8 @@ if MONTHLY_OUTCOMES_BAR_PLOT:
         ax_mo.legend()
         plt.tight_layout()
 
-monthly_pnl = daily_pnl_for_plots.resample('ME')['PNL_Daily'].sum()
-yearly_pnl  = daily_pnl_for_plots.resample('YE')['PNL_Daily'].sum()
+monthly_pnl = daily_pnl_for_plots.resample('M')['PNL_Daily'].sum()
+yearly_pnl = daily_pnl_for_plots.resample('Y')['PNL_Daily'].sum()
 
 # ======================
 #  STATISTICS
@@ -747,8 +831,8 @@ print("SIMULATION RESULTS")
 print("=" * 60)
 
 number_accounts_started     = len(accounts)
-number_accounts_passed      = sum(1 for acc in accounts if acc.get('passed', False) and (acc['pass_date'] - acc['start_date']).days <= TIME_TRIGGER_DAYS)
-number_accounts_passedblown = sum(1 for acc in accounts if acc.get('passed', False) and (acc['pass_date'] - acc['start_date']).days > TIME_TRIGGER_DAYS)
+number_accounts_passed      = sum(1 for acc in accounts if acc.get('passed', False) and (acc['pass_date'] - acc['start_date']).days <= 30)
+number_accounts_passedblown = sum(1 for acc in accounts if acc.get('passed', False) and (acc['pass_date'] - acc['start_date']).days > 30)
 number_accounts_blown       = sum(1 for acc in accounts if not acc['alive'] and not acc.get('passed', False))
 number_accounts_alive       = sum(1 for acc in accounts if acc['alive'])
 
@@ -757,7 +841,7 @@ print("-" * 60)
 print(f"{'Accounts Started:':<35} {number_accounts_started}")
 print(f"{'Accounts PASSED (target hit):':<35} {number_accounts_passed}  "
       f"({number_accounts_passed / number_accounts_started * 100:.1f}%)")
-print(f"{'Accounts PASSEDBLOWN (>{TIME_TRIGGER_DAYS}d):':<35} {number_accounts_passedblown}  "
+print(f"{'Accounts PASSEDBLOWN (>30d):':<35} {number_accounts_passedblown}  "
       f"({number_accounts_passedblown / number_accounts_started * 100:.1f}%)")
 print(f"{'Accounts BLOWN (DD breach):':<35} {number_accounts_blown}  "
       f"({number_accounts_blown / number_accounts_started * 100:.1f}%)")
@@ -770,7 +854,7 @@ print("-" * 60)
 for acc in accounts:
     if acc.get('passed', False):
         days = (acc['pass_date'] - acc['start_date']).days
-        status = "PASSEDBLOWN ✗" if days > TIME_TRIGGER_DAYS else "PASSED ✓"
+        status = "PASSEDBLOWN ✗" if days > 30 else "PASSED ✓"
         extra = (f"Pass Date: {acc['pass_date'].date()}  "
                  f"Pass P&L: ${acc['pass_pnl']:,.2f}  "
                  f"Duration: {days}d")

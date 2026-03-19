@@ -3,7 +3,6 @@ import matplotlib.pyplot as plt
 import numpy as np
 import matplotlib.dates as mdates
 import matplotlib.ticker as mticker
-import matplotlib.ticker as ticker
 from datetime import timedelta
 
 # ========================================================================================
@@ -13,7 +12,7 @@ pd.set_option('display.min_rows', 1000)
 pd.set_option('display.max_rows', 2000)
 pd.set_option('display.max_categories', 10)
 
-CSV_PATH = "databento_premarket_eval_10_1.16.csv"  # Path to your CSV file with trade data
+CSV_PATH = "databento_premarket_eval_15_1.16.csv"  # Path to your CSV file with trade data
 
 # --- Drawdown settings ---
 
@@ -34,7 +33,7 @@ END_DATE = None
 # ==================================================================
 MAX_ACCOUNTS = 100
 USE_TIME_TRIGGER = True
-TIME_TRIGGER_DAYS = 10
+START_NEW_ACCOUNT_DAYS = 10
 USE_PROFIT_TRIGGER = False
 START_IF_PROFIT_THRESHOLD = 1000
 USE_DD_TRIGGER = False
@@ -49,6 +48,7 @@ MIN_DAYS_BETWEEN_STARTS = 1
 UNIFIED_EQUITY_AND_DD_PLOTS_3 = True
 STARTED_ACCOUNTS_PNL_PLOT = True
 PORTFOLIO_TOTAL_PNL_PLOT = True
+MONTHLY_OUTCOMES_BAR_PLOT = True   # NEW: monthly PASSED / PASSEDBLOWN / BLOWN bar chart
 
 # ==================================================================
 #  SIMULATION ASSUMPTIONS
@@ -167,18 +167,6 @@ def compute_prop_style_drawdown(df):
 
 
 def create_trade_events_with_priority(df):
-    """
-    Convert each trade into events with proper priority ordering.
-
-    IMPORTANT ASSUMPTION: MAE occurs before MFE within each trade.
-    This is the most conservative assumption for blowout testing.
-
-    Priority ordering per trade:
-    - 0: Entry
-    - 1: MAE (worst point first — conservative)
-    - 2: MFE (best point second)
-    - 3: Exit
-    """
     events = []
     cumulative_pnl = 0
 
@@ -242,13 +230,6 @@ def create_trade_events_with_priority(df):
 
 
 def simulate_accounts_with_prop_dd_optimized(events_df, start_capital, max_accounts):
-    """
-    Simulates multiple accounts using EOD threshold DD.
-
-    PROFIT TARGET:
-      - Checked at every trade exit.
-      - If closed P&L >= PROFIT_TARGET the account is marked 'passed' and stops trading.
-    """
     accounts = []
 
     event_times = events_df['time'].values
@@ -456,7 +437,7 @@ def simulate_accounts_with_prop_dd_optimized(events_df, start_capital, max_accou
                         trigger_profit = True
 
                 if USE_TIME_TRIGGER:
-                    next_start_time = last_start_date + pd.Timedelta(days=TIME_TRIGGER_DAYS)
+                    next_start_time = last_start_date + pd.Timedelta(days=START_NEW_ACCOUNT_DAYS)
                     if current_time >= next_start_time:
                         trigger_time = True
 
@@ -467,7 +448,7 @@ def simulate_accounts_with_prop_dd_optimized(events_df, start_capital, max_accou
                 time_diff = current_time - last_start_date
                 days_since_last = time_diff.total_seconds() / (24 * 3600)
                 if days_since_last >= MIN_DAYS_BETWEEN_STARTS:
-                    scheduled_start = last_start_date + pd.Timedelta(days=TIME_TRIGGER_DAYS)
+                    scheduled_start = last_start_date + pd.Timedelta(days=START_NEW_ACCOUNT_DAYS)
                     new_acc = make_account(len(accounts) + 1, event_idx, scheduled_start)
                     accounts.append(new_acc)
                     print(f"Started Account {len(accounts)} scheduled for {scheduled_start} (first event {current_time})")
@@ -542,7 +523,7 @@ def simulate_accounts_closed_dd(pl_series, start_capital, max_accounts):
         account_pnls.append(row)
 
         if len(accounts) < max_accounts and USE_TIME_TRIGGER:
-            if (date - last_start_date).days >= TIME_TRIGGER_DAYS:
+            if (date - last_start_date).days >= START_NEW_ACCOUNT_DAYS:
                 accounts.append({
                     'id': len(accounts) + 1, 'start_idx': i_date, 'start_date': date,
                     'equity': start_capital, 'pnl': 0,
@@ -569,7 +550,7 @@ def print_config():
     if START_DATE: print(f"START_DATE:        {START_DATE}")
     if END_DATE:   print(f"END_DATE:          {END_DATE}")
     print(f"MAX_ACCOUNTS:      {MAX_ACCOUNTS}")
-    print(f"TIME_TRIGGER_DAYS: {TIME_TRIGGER_DAYS}")
+    print(f"START_NEW_ACCOUNT_DAYS: {START_NEW_ACCOUNT_DAYS}")
     print("=====================")
 
 
@@ -757,6 +738,88 @@ if STARTED_ACCOUNTS_PNL_PLOT and not acc_pnl_df.empty:
     ax_accounts.legend()
     plt.tight_layout()
 
+# ============================================================
+# MONTHLY OUTCOMES BAR PLOT
+# ============================================================
+
+if MONTHLY_OUTCOMES_BAR_PLOT:
+    # Build a per-account outcome record using the end date of each account
+    outcome_records = []
+    for acc in accounts:
+        if acc.get('passed', False):
+            days = (acc['pass_date'] - acc['start_date']).days
+            outcome = 'PASSEDBLOWN' if days > 30 else 'PASSED'
+            end_date = acc['pass_date']
+        elif acc['blow_date'] is not None:
+            outcome = 'BLOWN'
+            end_date = acc['blow_date']
+        else:
+            # Still active — skip from this chart
+            continue
+        outcome_records.append({'month': end_date.to_period('M'), 'outcome': outcome})
+
+    if outcome_records:
+        outcomes_df = pd.DataFrame(outcome_records)
+        monthly_outcomes = (
+            outcomes_df
+            .groupby(['month', 'outcome'])
+            .size()
+            .unstack(fill_value=0)
+            .sort_index()
+        )
+
+        # Ensure all three columns exist even if a category had zero in all months
+        for col in ['PASSED', 'PASSEDBLOWN', 'BLOWN']:
+            if col not in monthly_outcomes.columns:
+                monthly_outcomes[col] = 0
+        monthly_outcomes = monthly_outcomes[['PASSED', 'PASSEDBLOWN', 'BLOWN']]
+
+        month_labels = [str(m) for m in monthly_outcomes.index]
+        x = np.arange(len(month_labels))
+        bar_width = 0.25
+
+        fig_mo, ax_mo = plt.subplots(figsize=(max(10, len(month_labels) * 1.1), 6))
+
+        bars_passed = ax_mo.bar(
+            x - bar_width, monthly_outcomes['PASSED'],
+            width=bar_width, color='#2ecc71', edgecolor='white', linewidth=0.6,
+            label='PASSED ✓'
+        )
+        bars_pb = ax_mo.bar(
+            x, monthly_outcomes['PASSEDBLOWN'],
+            width=bar_width, color='#f39c12', edgecolor='white', linewidth=0.6,
+            label=f'PASSEDBLOWN ✗ (>{30}d)'
+        )
+        bars_blown = ax_mo.bar(
+            x + bar_width, monthly_outcomes['BLOWN'],
+            width=bar_width, color='#e74c3c', edgecolor='white', linewidth=0.6,
+            label='BLOWN ✗'
+        )
+
+        # Value labels on top of each bar
+        for bars in [bars_passed, bars_pb, bars_blown]:
+            for bar in bars:
+                h = bar.get_height()
+                if h > 0:
+                    ax_mo.text(
+                        bar.get_x() + bar.get_width() / 2, h + 0.05,
+                        str(int(h)), ha='center', va='bottom', fontsize=9, fontweight='bold'
+                    )
+
+        ax_mo.set_xticks(x)
+        ax_mo.set_xticklabels(month_labels, rotation=45, ha='right')
+        ax_mo.yaxis.set_major_locator(mticker.MaxNLocator(integer=True))
+        ax_mo.set_title(
+            f"Monthly Account Outcomes — {mode}\n"
+            f"(Profit Target: ${PROFIT_TARGET:,.0f}  |  Max DD: ${MAX_DRAWDOWN:,.0f}  |  Time Limit: {30}d)",
+            fontsize=12
+        )
+        ax_mo.set_ylabel("Number of Accounts")
+        ax_mo.set_xlabel("Month (outcome date)")
+        ax_mo.grid(True, alpha=0.3, axis='y')
+        ax_mo.legend()
+        plt.tight_layout()
+
 monthly_pnl = daily_pnl_for_plots.resample('M')['PNL_Daily'].sum()
 yearly_pnl = daily_pnl_for_plots.resample('Y')['PNL_Daily'].sum()
 
@@ -789,7 +852,6 @@ print("-" * 60)
 print("\nPER-ACCOUNT DETAIL:")
 print("-" * 60)
 for acc in accounts:
-    duration_str = ""
     if acc.get('passed', False):
         days = (acc['pass_date'] - acc['start_date']).days
         status = "PASSEDBLOWN ✗" if days > 30 else "PASSED ✓"
