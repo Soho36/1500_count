@@ -4,6 +4,7 @@ import numpy as np
 import matplotlib.dates as mdates
 import matplotlib.ticker as mticker
 from datetime import timedelta
+import random
 
 # ========================================================================================
 #  CONFIG
@@ -11,18 +12,18 @@ from datetime import timedelta
 pd.set_option('display.min_rows', 1000)
 pd.set_option('display.max_rows', 2000)
 pd.set_option('display.max_categories', 10)
+random.seed(42)
 
-CSV_PATH = "databento_premarket_eval_15_1.16.csv"  # Path to your CSV file with trade data
+CSV_PATH = "eval_hit.csv"  # Path to your CSV file with trade data
 
-# --- Drawdown settings ---
-
+# --- Settings ---
 MAX_DRAWDOWN = 2000
+PROFIT_TARGET = 6000
+
+DAYS_TO_PASS = 30  # If account reaches profit target but takes longer than this, it's "PASSEDBLOWN" instead of "PASSED"
 START_CAPITAL = MAX_DRAWDOWN
 equity_dd_freeze_trigger = START_CAPITAL + MAX_DRAWDOWN + 100
 frozen_dd_floor = START_CAPITAL + 100
-
-# --- Profit target ---
-PROFIT_TARGET = 3000
 
 # --- Date range filter ---
 START_DATE = None
@@ -31,9 +32,9 @@ END_DATE = None
 # ==================================================================
 # --- New account start triggers ---
 # ==================================================================
-MAX_ACCOUNTS = 100
+MAX_ACCOUNTS = 500
 USE_TIME_TRIGGER = True
-START_NEW_ACCOUNT_DAYS = 10
+START_NEW_ACCOUNT_DAYS = 1
 USE_PROFIT_TRIGGER = False
 START_IF_PROFIT_THRESHOLD = 1000
 USE_DD_TRIGGER = False
@@ -166,13 +167,20 @@ def compute_prop_style_drawdown(df):
     return daily_data, dd_curve
 
 
-def create_trade_events_with_priority(df):
+def create_trade_events_with_priority(df, mode="mae_first"):
+    """
+    mode:
+        "mae_first"  -> always MAE then MFE (conservative)
+        "mfe_first"  -> always MFE then MAE (optimistic)
+        "random"     -> random order per trade (Monte Carlo)
+    """
     events = []
     cumulative_pnl = 0
 
     for trade_idx, trade in df.iterrows():
         pre_trade_equity = cumulative_pnl
 
+        # ENTRY
         events.append({
             'time': trade['Entry_time'],
             'trade_idx': trade_idx,
@@ -185,32 +193,39 @@ def create_trade_events_with_priority(df):
             'equity_change': 0
         })
 
-        mae_time = trade['Entry_time'] + timedelta(microseconds=1)
+        # Decide path
+        if mode == "mae_first":
+            mae_first = True
+        elif mode == "mfe_first":
+            mae_first = False
+        elif mode == "random":
+            mae_first = random.choice([True, False])
+        else:
+            raise ValueError("Invalid mode")
+
+        # Single intratrade event
+        t1 = trade['Entry_time'] + timedelta(microseconds=1)
+
+        if mae_first:
+            event_type = 'mae'
+            temp_equity = pre_trade_equity + trade['MAE']
+        else:
+            event_type = 'mfe'
+            temp_equity = pre_trade_equity + trade['MFE']
+
         events.append({
-            'time': mae_time,
+            'time': t1,
             'trade_idx': trade_idx,
-            'event_type': 'mae',
+            'event_type': event_type,
             'priority': 1,
             'pre_trade_equity': pre_trade_equity,
             'mae': trade['MAE'],
             'mfe': trade['MFE'],
             'pnl': trade['PNL'],
-            'temp_equity': pre_trade_equity + trade['MAE']
+            'temp_equity': temp_equity
         })
 
-        mfe_time = trade['Entry_time'] + timedelta(microseconds=2)
-        events.append({
-            'time': mfe_time,
-            'trade_idx': trade_idx,
-            'event_type': 'mfe',
-            'priority': 2,
-            'pre_trade_equity': pre_trade_equity,
-            'mae': trade['MAE'],
-            'mfe': trade['MFE'],
-            'pnl': trade['PNL'],
-            'temp_equity': pre_trade_equity + trade['MFE']
-        })
-
+        # EXIT
         cumulative_pnl += trade['PNL']
         events.append({
             'time': trade['Exit_time'],
@@ -588,7 +603,7 @@ print(f"4. Freeze trigger: once peak closing equity >= {equity_dd_freeze_trigger
 print(f"5. Profit target: ${PROFIT_TARGET:,.0f} — account stops trading when reached")
 print("=" * 60)
 
-events_df = create_trade_events_with_priority(df)
+events_df = create_trade_events_with_priority(df, mode="random")
 print(f"Created {len(events_df)} events from {len(df)} trades")
 print(f"Event type distribution:\n{events_df['event_type'].value_counts()}")
 
@@ -748,7 +763,7 @@ if MONTHLY_OUTCOMES_BAR_PLOT:
     for acc in accounts:
         if acc.get('passed', False):
             days = (acc['pass_date'] - acc['start_date']).days
-            outcome = 'PASSEDBLOWN' if days > 30 else 'PASSED'
+            outcome = 'PASSEDBLOWN' if days > DAYS_TO_PASS else 'PASSED'
             end_date = acc['pass_date']
         elif acc['blow_date'] is not None:
             outcome = 'BLOWN'
@@ -788,7 +803,7 @@ if MONTHLY_OUTCOMES_BAR_PLOT:
         bars_pb = ax_mo.bar(
             x, monthly_outcomes['PASSEDBLOWN'],
             width=bar_width, color='#f39c12', edgecolor='white', linewidth=0.6,
-            label=f'PASSEDBLOWN ✗ (>{30}d)'
+            label=f'PASSEDBLOWN ✗ (>{DAYS_TO_PASS}d)'
         )
         bars_blown = ax_mo.bar(
             x + bar_width, monthly_outcomes['BLOWN'],
@@ -811,7 +826,7 @@ if MONTHLY_OUTCOMES_BAR_PLOT:
         ax_mo.yaxis.set_major_locator(mticker.MaxNLocator(integer=True))
         ax_mo.set_title(
             f"Monthly Account Outcomes — {mode}\n"
-            f"(Profit Target: ${PROFIT_TARGET:,.0f}  |  Max DD: ${MAX_DRAWDOWN:,.0f}  |  Time Limit: {30}d)",
+            f"(Profit Target: ${PROFIT_TARGET:,.0f}  |  Max DD: ${MAX_DRAWDOWN:,.0f}  |  Time Limit: {DAYS_TO_PASS}d)",
             fontsize=12
         )
         ax_mo.set_ylabel("Number of Accounts")
@@ -831,8 +846,8 @@ print("SIMULATION RESULTS")
 print("=" * 60)
 
 number_accounts_started     = len(accounts)
-number_accounts_passed      = sum(1 for acc in accounts if acc.get('passed', False) and (acc['pass_date'] - acc['start_date']).days <= 30)
-number_accounts_passedblown = sum(1 for acc in accounts if acc.get('passed', False) and (acc['pass_date'] - acc['start_date']).days > 30)
+number_accounts_passed      = sum(1 for acc in accounts if acc.get('passed', False) and (acc['pass_date'] - acc['start_date']).days <= DAYS_TO_PASS)
+number_accounts_passedblown = sum(1 for acc in accounts if acc.get('passed', False) and (acc['pass_date'] - acc['start_date']).days > DAYS_TO_PASS)
 number_accounts_blown       = sum(1 for acc in accounts if not acc['alive'] and not acc.get('passed', False))
 number_accounts_alive       = sum(1 for acc in accounts if acc['alive'])
 
@@ -841,7 +856,7 @@ print("-" * 60)
 print(f"{'Accounts Started:':<35} {number_accounts_started}")
 print(f"{'Accounts PASSED (target hit):':<35} {number_accounts_passed}  "
       f"({number_accounts_passed / number_accounts_started * 100:.1f}%)")
-print(f"{'Accounts PASSEDBLOWN (>30d):':<35} {number_accounts_passedblown}  "
+print(f"{'Accounts PASSEDBLOWN (>{DAYS_TO_PASS}d):':<35} {number_accounts_passedblown}  "
       f"({number_accounts_passedblown / number_accounts_started * 100:.1f}%)")
 print(f"{'Accounts BLOWN (DD breach):':<35} {number_accounts_blown}  "
       f"({number_accounts_blown / number_accounts_started * 100:.1f}%)")
@@ -854,7 +869,7 @@ print("-" * 60)
 for acc in accounts:
     if acc.get('passed', False):
         days = (acc['pass_date'] - acc['start_date']).days
-        status = "PASSEDBLOWN ✗" if days > 30 else "PASSED ✓"
+        status = "PASSEDBLOWN ✗" if days > DAYS_TO_PASS else "PASSED ✓"
         extra = (f"Pass Date: {acc['pass_date'].date()}  "
                  f"Pass P&L: ${acc['pass_pnl']:,.2f}  "
                  f"Duration: {days}d")
@@ -905,7 +920,7 @@ if not yearly_pnl.empty:
           f" ({(yearly_pnl > 0).sum()}/{len(yearly_pnl)})")
 
 print("\n" + "=" * 60)
-print("\nNOTE: Simulation assumes MAE occurs before MFE in each trade (conservative).")
+print("\nNOTE: Intra-trade MAE/MFE order is randomized per trade (Monte Carlo approximation).")
 print(f"Total Capital Deployed across {number_accounts_started} accounts: ${total_capital_deployed:,.2f}")
 
 try:

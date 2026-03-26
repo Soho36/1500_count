@@ -13,25 +13,25 @@ pd.set_option('display.min_rows', 1000)
 pd.set_option('display.max_rows', 2000)
 pd.set_option('display.max_categories', 10)
 
-CSV_PATH = "databento_all_mini.csv"  # Path to your CSV file with trade data
+CSV_PATH = "SL5_TP25.csv"  # Path to your CSV file with trade data
 
 # --- Drawdown settings ---
 
-MAX_DRAWDOWN = 2500
+MAX_DRAWDOWN = 2000  # Maximum drawdown allowed before an account is blown (e.g., $2000)
 START_CAPITAL = MAX_DRAWDOWN
 equity_dd_freeze_trigger = START_CAPITAL + MAX_DRAWDOWN + 100
 frozen_dd_floor = START_CAPITAL + 100
 
 # --- Date range filter ---
 START_DATE = None
-END_DATE = None
+END_DATE   = None
 
 # ==================================================================
 # --- New account start triggers ---
 # ==================================================================
 MAX_ACCOUNTS = 1
 USE_TIME_TRIGGER = True
-TIME_TRIGGER_DAYS = 30
+TIME_TRIGGER_DAYS = 60
 USE_PROFIT_TRIGGER = False
 START_IF_PROFIT_THRESHOLD = 1000
 USE_DD_TRIGGER = False
@@ -48,8 +48,8 @@ STARTED_ACCOUNTS_PNL_PLOT = True
 PORTFOLIO_TOTAL_PNL_PLOT = True
 NUMBER_OF_ACTIVE_ACCOUNTS_OVER_TIME_PLOT = False
 # Bar plots
-SHOW_SINGLE_ACCOUNT_DAILY_PNL_PLOT = False
-SHOW_SINGLE_ACCOUNT_MONTHLY_PNL_PLOT = False
+SHOW_SINGLE_ACCOUNT_DAILY_PNL_PLOT = True
+SHOW_SINGLE_ACCOUNT_MONTHLY_PNL_PLOT = True
 SHOW_SINGLE_ACCOUNT_YEARLY_PNL_PLOT = False
 SHOW_PORTFOLIO_MONTHLY_PNL_PLOT = False
 SHOW_PORTFOLIO_YEARLY_PNL_PLOT = False

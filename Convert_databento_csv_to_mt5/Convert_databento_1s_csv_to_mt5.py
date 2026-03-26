@@ -1,5 +1,6 @@
 import pandas as pd
 import time
+import random
 
 
 def build_daily_roll_continuous(
@@ -7,7 +8,6 @@ def build_daily_roll_continuous(
     output_file,
     spread
 ):
-
     start_time = time.perf_counter()
     print("Starting conversion...")
 
@@ -40,12 +40,10 @@ def build_daily_roll_continuous(
 
     # Convert to Exchange timezone to align with session times
     print("Converting to timezone (America/Chicago)...")
-
-    # Step 1: convert with US DST rules applied
     df['ts_event'] = df['ts_event'].dt.tz_convert('America/Chicago')
     df['ts_event'] = df['ts_event'].dt.tz_localize(None)
 
-    # Step 2: shift forward by fixed hours to put session close at 23:59 to match MT5's charts
+    # Shift forward by 8h to put session close at 23:59 to match MT5's charts
     df['ts_event'] = df['ts_event'] + pd.Timedelta(hours=8)
 
     print("Extracting dates...")
@@ -63,47 +61,76 @@ def build_daily_roll_continuous(
                     .drop_duplicates('trade_date')
     )
 
-    print("🔗 Merging dominant contracts...")
+    print("Merging dominant contracts...")
     df = df.merge(
         dominant[['trade_date', 'symbol']],
         on=['trade_date', 'symbol']
     )
 
-    print("Sorting final dataset...")
-    df = df.sort_values('ts_event')
+    print("Sorting dataset...")
+    df = df.sort_values('ts_event').reset_index(drop=True)
 
-    print("🛠 Formatting MT5 structure...")
-    df['<DATE>'] = df['ts_event'].dt.strftime('%Y.%m.%d')
-    df['<TIME>'] = df['ts_event'].dt.strftime('%H:%M:%S')
+    print("Synthesizing ticks from OHLC...")
 
-    df.rename(columns={
-        'open': '<OPEN>',
-        'high': '<HIGH>',
-        'low': '<LOW>',
-        'close': '<CLOSE>',
-        'volume': '<TICKVOL>'
-    }, inplace=True)
+    def ohlc_to_ticks(df, spread):
+        random.seed(42)
+        tick_rows = []
 
-    df['<VOL>'] = df['<TICKVOL>']
-    df['<SPREAD>'] = spread
+        for row in df.itertuples(index=False):
+            ts = row.ts_event
+            o = float(row.open)
+            h = float(row.high)
+            l = float(row.low)
+            c = float(row.close)
+            vol = row.volume
 
-    output_df = df[
-        ['<DATE>', '<TIME>', '<OPEN>', '<HIGH>', '<LOW>', '<CLOSE>',
-         '<TICKVOL>', '<VOL>', '<SPREAD>']
-    ]
+            # Heuristic: visit the closer extreme first
+            if random.random() < 0.5:
+                path = [o, h, l, c]
+            else:
+                path = [o, l, h, c]
+
+            # Distribute bar volume across 4 ticks
+            base_vol = vol // 4
+            remainder = vol % 4
+
+            for i, price in enumerate(path):
+                tick_time = ts + pd.Timedelta(milliseconds=i * 200)
+
+                bid = round(price - spread / 2, 2)
+                ask = round(price + spread / 2, 2)
+                last = round(price, 2)
+
+                tick_vol = base_vol + (1 if i < remainder else 0)
+
+                tick_rows.append([
+                    tick_time.strftime('%Y.%m.%d'),
+                    tick_time.strftime('%H:%M:%S.%f')[:-3],
+                    bid,
+                    ask,
+                    last,
+                    tick_vol
+                ])
+
+        tick_df = pd.DataFrame(
+            tick_rows,
+            columns=['<DATE>', '<TIME>', '<BID>', '<ASK>', '<LAST>', '<VOLUME>']
+        )
+        return tick_df
+
+    output_df = ohlc_to_ticks(df, spread)
 
     print("Writing output file...")
     output_df.to_csv(
         output_file,
-        sep='\t',
         index=False,
         float_format='%.2f'
     )
 
     end_time = time.perf_counter()
 
-    print("\n✔ Continuous (daily-roll) file created")
-    print(f"Rows: {len(output_df):,}")
+    print("\n✔ Tick file created successfully")
+    print(f"Tick rows: {len(output_df):,}")
     print("Date range:", output_df['<DATE>'].min(), "→", output_df['<DATE>'].max())
     print(f"⏱ Total time: {end_time - start_time:.2f} seconds")
 
@@ -112,11 +139,11 @@ def build_daily_roll_continuous(
 
 if __name__ == "__main__":
     folder_path = "F:\\DATABENTO\\mnq_last_days\\"
-    in_file = f"{folder_path}1mdatabentocurrent.csv"
-    input_filename = in_file[-1].split(".")[0]  # Extract filename
-    out_file = f"{folder_path}MT5_{input_filename}_converted.csv"
+    in_file = f"{folder_path}mnq_ohlcv-1s.csv.zst"
+    input_filename = in_file.split("\\")[-1].split(".")[0]  # Fixed extraction
+    out_file = f"{folder_path}MT5_{input_filename}_ticks.csv"
     build_daily_roll_continuous(
         input_file=in_file,
         output_file=out_file,
-        spread=1
+        spread=0.25  # Adjust to your instrument's tick size
     )
