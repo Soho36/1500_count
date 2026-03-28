@@ -89,21 +89,19 @@ def build_daily_roll_continuous(
         rows.append(pd.DataFrame({
             '<DATE>':    date_str,
             '<TIME>':    base_time + '.' + offset,
-            '<BID>':     (price_col - spread / 2).round(2),
-            '<ASK>':     (price_col + spread / 2).round(2),
+            '<BID>':     (price_col - spread).round(2),
+            '<ASK>':     (price_col + spread).round(2),
             '<LAST>':    price_col.round(2),
             '<VOLUME>':  vol_col,
-            '<FLAGS>':   4,
             '_sort_key': df['ts_event'].values.astype('int64') + i
         }))
 
     output_df = pd.concat(rows, ignore_index=True)
     output_df = output_df.sort_values('_sort_key').drop(columns='_sort_key').reset_index(drop=True)
 
-    print("Writing output file (tab-separated, as MT5 expects)...")
+    print("Writing output file...")
     output_df.to_csv(
         output_file,
-        sep='\t',
         index=False,
         float_format='%.2f'
     )
@@ -119,7 +117,7 @@ def build_daily_roll_continuous(
 
 
 if __name__ == "__main__":
-    folder_path = "F:\\DATABENTO\\mnq_last_days\\"
+    folder_path = "C:\\Source\\DATABENTO\\MNQ\\seconds\\"
     in_file = f"{folder_path}MNQ_ohlcv-1s.csv"
     input_filename = in_file.split("\\")[-1].split(".")[0]
     out_file = f"{folder_path}MT5_{input_filename}_ticks.csv"
