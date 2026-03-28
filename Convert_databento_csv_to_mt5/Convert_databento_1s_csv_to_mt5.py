@@ -7,7 +7,6 @@ def build_daily_roll_continuous(
     output_file,
     spread
 ):
-
     start_time = time.perf_counter()
     print("Starting conversion...")
 
@@ -24,10 +23,7 @@ def build_daily_roll_continuous(
     df = pd.read_csv(
         input_file,
         dtype=dtypes,
-        usecols=[
-            'ts_event', 'open', 'high', 'low',
-            'close', 'volume', 'symbol'
-        ]
+        usecols=['ts_event', 'open', 'high', 'low', 'close', 'volume', 'symbol']
     )
     print(f"Rows loaded: {len(df):,}")
 
@@ -38,14 +34,11 @@ def build_daily_roll_continuous(
         utc=True
     )
 
-    # Convert to Exchange timezone to align with session times
     print("Converting to timezone (America/Chicago)...")
-
-    # Step 1: convert with US DST rules applied
     df['ts_event'] = df['ts_event'].dt.tz_convert('America/Chicago')
     df['ts_event'] = df['ts_event'].dt.tz_localize(None)
 
-    # Step 2: shift forward by fixed hours to put session close at 23:59 to match MT5's charts
+    # Shift forward by 8h to put session close at 23:59 to match MT5's charts
     df['ts_event'] = df['ts_event'] + pd.Timedelta(hours=8)
 
     print("Extracting dates...")
@@ -57,42 +50,57 @@ def build_daily_roll_continuous(
           .sum()
           .reset_index()
     )
-
     dominant = (
         daily_volume.sort_values(['trade_date', 'volume'], ascending=[True, False])
                     .drop_duplicates('trade_date')
     )
 
-    print("🔗 Merging dominant contracts...")
+    print("Merging dominant contracts...")
     df = df.merge(
         dominant[['trade_date', 'symbol']],
         on=['trade_date', 'symbol']
     )
 
-    print("Sorting final dataset...")
-    df = df.sort_values('ts_event')
+    print("Sorting dataset...")
+    df = df.sort_values('ts_event').reset_index(drop=True)
 
-    print("🛠 Formatting MT5 structure...")
-    df['<DATE>'] = df['ts_event'].dt.strftime('%Y.%m.%d')
-    df['<TIME>'] = df['ts_event'].dt.strftime('%H:%M:%S')
+    print("Expanding 1s bars → 4 ticks each (open/high/low/close)...")
 
-    df.rename(columns={
-        'open': '<OPEN>',
-        'high': '<HIGH>',
-        'low': '<LOW>',
-        'close': '<CLOSE>',
-        'volume': '<TICKVOL>'
-    }, inplace=True)
+    n = len(df)
+    date_str = df['ts_event'].dt.strftime('%Y.%m.%d')
+    base_time = df['ts_event'].dt.strftime('%H:%M:%S')
 
-    df['<VOL>'] = df['<TICKVOL>']
-    df['<SPREAD>'] = spread
+    prices = {
+        'open':  df['open'].values,
+        'high':  df['high'].values,
+        'low':   df['low'].values,
+        'close': df['close'].values,
+    }
+    volume = df['volume'].values
 
-    output_df = df[
-        ['<DATE>', '<TIME>', '<OPEN>', '<HIGH>', '<LOW>', '<CLOSE>',
-         '<TICKVOL>', '<VOL>', '<SPREAD>']
-    ]
+    rows = []
+    offsets = ['000', '025', '050', '075']
+    ohlc_keys = ['open', 'high', 'low', 'close']
+    vol_map = [0, 0, 0, 1]
 
-    print("Writing output file...")
+    for i, offset, key, use_vol in zip(range(4), offsets, ohlc_keys, vol_map):
+        price_col = prices[key]
+        vol_col = volume if use_vol else [0] * n
+        rows.append(pd.DataFrame({
+            '<DATE>':    date_str,
+            '<TIME>':    base_time + '.' + offset,
+            '<BID>':     (price_col - spread / 2).round(2),
+            '<ASK>':     (price_col + spread / 2).round(2),
+            '<LAST>':    price_col.round(2),
+            '<VOLUME>':  vol_col,
+            '<FLAGS>':   4,
+            '_sort_key': df['ts_event'].values.astype('int64') + i
+        }))
+
+    output_df = pd.concat(rows, ignore_index=True)
+    output_df = output_df.sort_values('_sort_key').drop(columns='_sort_key').reset_index(drop=True)
+
+    print("Writing output file (tab-separated, as MT5 expects)...")
     output_df.to_csv(
         output_file,
         sep='\t',
@@ -102,8 +110,8 @@ def build_daily_roll_continuous(
 
     end_time = time.perf_counter()
 
-    print("\n✔ Continuous (daily-roll) file created")
-    print(f"Rows: {len(output_df):,}")
+    print("\n✔ Tick file created successfully")
+    print(f"Tick rows: {len(output_df):,}  (= 4 per second bar: O/H/L/C)")
     print("Date range:", output_df['<DATE>'].min(), "→", output_df['<DATE>'].max())
     print(f"⏱ Total time: {end_time - start_time:.2f} seconds")
 
@@ -112,11 +120,11 @@ def build_daily_roll_continuous(
 
 if __name__ == "__main__":
     folder_path = "F:\\DATABENTO\\mnq_last_days\\"
-    in_file = f"{folder_path}1mdatabentocurrent.csv"
-    input_filename = in_file[-1].split(".")[0]  # Extract filename
-    out_file = f"{folder_path}MT5_{input_filename}_converted.csv"
+    in_file = f"{folder_path}MNQ_ohlcv-1s.csv"
+    input_filename = in_file.split("\\")[-1].split(".")[0]
+    out_file = f"{folder_path}MT5_{input_filename}_ticks.csv"
     build_daily_roll_continuous(
         input_file=in_file,
         output_file=out_file,
-        spread=1
+        spread=0.25
     )
