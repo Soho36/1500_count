@@ -7,9 +7,10 @@ import numpy as np
 #  CONFIG — edit these values before running
 # ==============================================================================
 
-INPUT_FILE  = r"C:\Source\DATABENTO\MNQ\seconds\MNQ_ohlcv-1s.csv"        # Path to your 1s OHLC source CSV
-OUTPUT_FILE = r"C:\Source\DATABENTO\MNQ\seconds\MT5_MNQ_ohlcv-1s_ticks_silla.csv"     # Path for the output MT5 tick CSV
-DOMINANT_FILE = r"C:\Source\DATABENTO\MNQ\seconds\dominant_contracts.csv"
+INPUT_FILE = r"F:\DATABENTO\1s\MNQ_ohlcv-1s.csv"                    # Path to your 1s OHLC source CSV
+DOMINANT_FILE = r"F:\DATABENTO\1s\dominant_contracts.csv"
+OUTPUT_FILE = r"F:\DATABENTO\1s\MT5_MNQ_ohlcv-1s_ticks_silla_olhc.csv"     # Path for the output MT5 tick CSV
+
 
 # --- Column names in your source CSV ---
 # If date and time are in SEPARATE columns:
@@ -40,7 +41,7 @@ PATH_MODE = "olhc"
 And compare outcomes.
 Better solution (later): randomized ordering.
 """
-PATH_MODE = "auto"    # "auto", "ohlc", "olhc"
+PATH_MODE = "olhc"    # "auto", "ohlc", "olhc"
 
 # If date and time are in a SINGLE combined column, set this instead:
 DATETIME_COL = "ts_event"         # e.g. "Datetime"  — set to None to use DATE_COL + TIME_COL

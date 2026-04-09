@@ -2,7 +2,7 @@ import pandas as pd
 
 print("Loading CSV...")
 df = pd.read_csv(
-    r"C:\Source\DATABENTO\MNQ\seconds\MNQ_ohlcv-1s.csv",
+    r"F:\DATABENTO\1s\MNQ_ohlcv-1s.csv",
     usecols=["ts_event", "symbol", "volume"]
 )
 print(f"Rows loaded: {len(df):,}")
@@ -33,5 +33,5 @@ dominant = (
          .drop_duplicates("trade_date")
 )
 print("Saving dominant contracts to CSV...")
-dominant.to_csv(r"C:\Source\DATABENTO\MNQ\seconds\dominant_contracts.csv", index=False)
+dominant.to_csv(r"F:\DATABENTO\1s\dominant_contracts.csv", index=False)
 print("Done.")
