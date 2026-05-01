@@ -1,5 +1,4 @@
 import pandas as pd
-# from datetime import datetime
 
 
 def merge_trade_files_robust(file1_path, file2_path, output_path):
@@ -7,8 +6,16 @@ def merge_trade_files_robust(file1_path, file2_path, output_path):
     More robust version that handles potential column differences
     """
     # Read files, stripping whitespace from column names
-    df1 = pd.read_csv(file1_path, sep='\t', encoding='utf-8')
-    df2 = pd.read_csv(file2_path, sep='\t', encoding='utf-8')
+    try:
+        df1 = pd.read_csv(file1_path, sep='\t', encoding='utf-8')
+    except Exception as e:
+        print(f"Error reading {file1_path}: {e}")
+        return None
+    try:
+        df2 = pd.read_csv(file2_path, sep='\t', encoding='utf-8')
+    except Exception as e:
+        print(f"Error reading {file2_path}: {e}")
+        return None
 
     # Clean column names (remove trailing/leading whitespace)
     df1.columns = df1.columns.str.strip()
@@ -50,14 +57,14 @@ def merge_trade_files_robust(file1_path, file2_path, output_path):
     # Save to file
     merged_df.to_csv(output_path, sep='\t', encoding='utf-8', index=False)
 
-    print(f"Successfully merged files. Total trades: {len(merged_df)}")
+    print(f"\nSuccessfully merged files. Total trades: {len(merged_df)}")
     return merged_df
 
 
 if __name__ == "__main__":
     # For direct script usage
     merge_trade_files_robust(
-        "GG_all_times.csv",
-        "RG_all_times.csv",
-        "Merged_GG_RG_all_times.csv"
+        "GG_optimized_2010_2026.csv",
+        "RG_optimized_2010_2026.csv",
+        "Merged_GG_RG_optimized_2010_2026.csv"
     )

@@ -13,11 +13,11 @@ pd.set_option('display.min_rows', 1000)
 pd.set_option('display.max_rows', 2000)
 pd.set_option('display.max_categories', 10)
 
-CSV_PATH = "databento_all.csv"  # Path to your CSV file with trade data
+CSV_PATH = "Merged_GG_RG_optimized_2010_2026.csv"  # Path to your CSV file with trade data
 
 # --- Drawdown settings ---
 
-MAX_DRAWDOWN = 2500
+MAX_DRAWDOWN = 1500
 START_CAPITAL = MAX_DRAWDOWN  # For prop firm style, we set max drawdown equal to starting capital (100% loss = blowout)
 equity_dd_freeze_trigger = START_CAPITAL + MAX_DRAWDOWN + 100
 frozen_dd_floor = START_CAPITAL + 100
@@ -35,7 +35,7 @@ USE_TRAILING_DD = True
 # ==================================================================
 # --- New account start triggers ---
 # ==================================================================
-MAX_ACCOUNTS = 80
+MAX_ACCOUNTS = 20
 USE_TIME_TRIGGER = True
 TIME_TRIGGER_DAYS = 30
 USE_PROFIT_TRIGGER = False
@@ -54,11 +54,11 @@ STARTED_ACCOUNTS_PNL_PLOT = True
 PORTFOLIO_TOTAL_PNL_PLOT = True
 NUMBER_OF_ACTIVE_ACCOUNTS_OVER_TIME_PLOT = False
 # Bar plots
-SHOW_SINGLE_ACCOUNT_DAILY_PNL_PLOT = False
-SHOW_SINGLE_ACCOUNT_MONTHLY_PNL_PLOT = False
-SHOW_SINGLE_ACCOUNT_YEARLY_PNL_PLOT = False
-SHOW_PORTFOLIO_MONTHLY_PNL_PLOT = False
-SHOW_PORTFOLIO_YEARLY_PNL_PLOT = False
+SHOW_SINGLE_ACCOUNT_DAILY_PNL_PLOT = True
+SHOW_SINGLE_ACCOUNT_MONTHLY_PNL_PLOT = True
+SHOW_SINGLE_ACCOUNT_YEARLY_PNL_PLOT = True
+SHOW_PORTFOLIO_MONTHLY_PNL_PLOT = True
+SHOW_PORTFOLIO_YEARLY_PNL_PLOT = True
 
 # ==================================================================
 #  SIMULATION ASSUMPTIONS
