@@ -21,14 +21,19 @@ def build_daily_roll_continuous(
     }
 
     print("Loading CSV...")
-    df = pd.read_csv(
-        input_file,
-        dtype=dtypes,
-        usecols=[
-            'ts_event', 'open', 'high', 'low',
-            'close', 'volume', 'symbol'
-        ]
-    )
+    try:
+        df = pd.read_csv(
+            input_file,
+            dtype=dtypes,
+            usecols=[
+                'ts_event', 'open', 'high', 'low',
+                'close', 'volume', 'symbol'
+            ]
+        )
+    except Exception as e:
+        print("Error loading CSV:".upper(), e)
+        return None
+
     print(f"Rows loaded: {len(df):,}")
 
     print("Converting timestamps...")
@@ -111,10 +116,9 @@ def build_daily_roll_continuous(
 
 
 if __name__ == "__main__":
-    folder_path = "F:\\DATABENTO\\ES\\"
-    in_file = f"{folder_path}ES_full.ohlcv-1m.csv"
+    in_file = f"C:\\Source\\DATABENTO\\MNQ\\todate\\todate.csv"
     input_filename = in_file[-1].split(".")[0]  # Extract filename
-    out_file = f"{folder_path}MT5_{input_filename}_converted.csv"
+    out_file = f"C:\\Source\\DATABENTO\\MNQ\\MT5_{input_filename}_converted.csv"
     build_daily_roll_continuous(
         input_file=in_file,
         output_file=out_file,

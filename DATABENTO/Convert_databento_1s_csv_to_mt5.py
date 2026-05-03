@@ -117,10 +117,10 @@ def build_daily_roll_continuous(
 
 
 if __name__ == "__main__":
-    folder_path = "C:\\Source\\DATABENTO\\MNQ\\seconds\\"
-    in_file = f"{folder_path}MNQ_ohlcv-1s.csv"
+    folder_path = "C:\\Source\\DATABENTO\\MNQ\\todate"
+    in_file = f"{folder_path}\\todate.csv"
     input_filename = in_file.split("\\")[-1].split(".")[0]
-    out_file = f"{folder_path}MT5_{input_filename}_ticks.csv"
+    out_file = f"MT5_{input_filename}_ticks.csv"
     build_daily_roll_continuous(
         input_file=in_file,
         output_file=out_file,

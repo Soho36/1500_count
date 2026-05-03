@@ -13,7 +13,7 @@ pd.set_option('display.min_rows', 1000)
 pd.set_option('display.max_rows', 2000)
 pd.set_option('display.max_categories', 10)
 
-CSV_PATH = "Merged_GG_RG_optimized_2010_2026.csv"  # Path to your CSV file with trade data
+CSV_PATH = "Merged_RR_sRR_optimized_2010_2026.csv"  # Path to your CSV file with trade data
 
 # --- Drawdown settings ---
 
@@ -23,7 +23,7 @@ equity_dd_freeze_trigger = START_CAPITAL + MAX_DRAWDOWN + 100
 frozen_dd_floor = START_CAPITAL + 100
 
 # --- Date range filter ---
-START_DATE = "2020-01-01"
+START_DATE = None
 END_DATE = None
 
 # ==================================================================

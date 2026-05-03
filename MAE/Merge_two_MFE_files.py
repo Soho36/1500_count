@@ -64,7 +64,7 @@ def merge_trade_files_robust(file1_path, file2_path, output_path):
 if __name__ == "__main__":
     # For direct script usage
     merge_trade_files_robust(
-        "GG_optimized_2010_2026.csv",
-        "RG_optimized_2010_2026.csv",
-        "Merged_GG_RG_optimized_2010_2026.csv"
+        "RR_optimized_2010_2026.csv",
+        "sRR_optimized.csv",
+        "Merged_RR_sRR_optimized_2010_2026.csv"
     )
