@@ -1,5 +1,6 @@
 import pandas as pd
 import time
+import os
 
 
 def build_daily_roll_continuous(
@@ -116,9 +117,9 @@ def build_daily_roll_continuous(
 
 
 if __name__ == "__main__":
-    in_file = f"C:\\Source\\DATABENTO\\MNQ\\todate\\todate.csv"
-    input_filename = in_file[-1].split(".")[0]  # Extract filename
-    out_file = f"C:\\Source\\DATABENTO\\MNQ\\MT5_{input_filename}_converted.csv"
+    in_file = f"F:\\DATABENTO\\mnq_last_days\\till0105.ohlcv-1m.csv"
+    input_filename = os.path.basename(in_file).split(".")[0]  # Extract filename
+    out_file = f"F:\\DATABENTO\\mnq_last_days\\MT5_{input_filename}_converted.csv"
     build_daily_roll_continuous(
         input_file=in_file,
         output_file=out_file,

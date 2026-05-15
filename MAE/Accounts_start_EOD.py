@@ -13,7 +13,7 @@ pd.set_option('display.min_rows', 1000)
 pd.set_option('display.max_rows', 2000)
 pd.set_option('display.max_categories', 10)
 
-CSV_PATH = "SL5_TP25.csv"  # Path to your CSV file with trade data
+CSV_PATH = "RR_0.16x2_1415_1718.csv"  # Path to your CSV file with trade data
 
 # --- Drawdown settings ---
 
@@ -29,9 +29,9 @@ END_DATE   = None
 # ==================================================================
 # --- New account start triggers ---
 # ==================================================================
-MAX_ACCOUNTS = 1
+MAX_ACCOUNTS = 20
 USE_TIME_TRIGGER = True
-TIME_TRIGGER_DAYS = 60
+TIME_TRIGGER_DAYS = 30
 USE_PROFIT_TRIGGER = False
 START_IF_PROFIT_THRESHOLD = 1000
 USE_DD_TRIGGER = False
@@ -50,9 +50,9 @@ NUMBER_OF_ACTIVE_ACCOUNTS_OVER_TIME_PLOT = False
 # Bar plots
 SHOW_SINGLE_ACCOUNT_DAILY_PNL_PLOT = True
 SHOW_SINGLE_ACCOUNT_MONTHLY_PNL_PLOT = True
-SHOW_SINGLE_ACCOUNT_YEARLY_PNL_PLOT = False
-SHOW_PORTFOLIO_MONTHLY_PNL_PLOT = False
-SHOW_PORTFOLIO_YEARLY_PNL_PLOT = False
+SHOW_SINGLE_ACCOUNT_YEARLY_PNL_PLOT = True
+SHOW_PORTFOLIO_MONTHLY_PNL_PLOT = True
+SHOW_PORTFOLIO_YEARLY_PNL_PLOT = True
 
 # ==================================================================
 #  SIMULATION ASSUMPTIONS

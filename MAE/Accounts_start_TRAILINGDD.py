@@ -13,7 +13,7 @@ pd.set_option('display.min_rows', 1000)
 pd.set_option('display.max_rows', 2000)
 pd.set_option('display.max_categories', 10)
 
-CSV_PATH = "Merged_RR_sRR_optimized_2010_2026.csv"  # Path to your CSV file with trade data
+CSV_PATH = "RR_0.16x2_1415_1718.csv"  # Path to your CSV file with trade data
 
 # --- Drawdown settings ---
 
