@@ -117,9 +117,9 @@ def build_daily_roll_continuous(
 
 
 if __name__ == "__main__":
-    in_file = f"F:\\DATABENTO\\mnq_last_days\\till0105.ohlcv-1m.csv"
+    in_file = f"C:\\Source\\DATABENTO\\MNQ\\todate\\010526-160526_ohlcv-1m.csv"
     input_filename = os.path.basename(in_file).split(".")[0]  # Extract filename
-    out_file = f"F:\\DATABENTO\\mnq_last_days\\MT5_{input_filename}_converted.csv"
+    out_file = f"C:\\Source\\DATABENTO\\MNQ\\todate\\MT5_{input_filename}_converted.csv"
     build_daily_roll_continuous(
         input_file=in_file,
         output_file=out_file,
